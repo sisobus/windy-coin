@@ -9,3 +9,4 @@ risc0-zkvm = { version = "^3.0.5" }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 serde = { version = "1", features = ["derive"] }
 hex = "0.4"
+clap = { version = "4", features = ["derive"] }

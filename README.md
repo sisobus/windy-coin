@@ -2,12 +2,11 @@
 
 Proof-of-Windy: ZK-verified windy-lang execution mining for the **WNDY** token on Base.
 
-> **Status (Phase 1.3a):** ERC-20 contract + tests, plus a Risc Zero zkVM circuit that
-> runs the [windy-lang](https://crates.io/crates/windy-lang) interpreter on a hardcoded
-> program (`hello.wnd`) inside the guest and commits `(program_hash, output_hash,
-> exit_code, steps)` to the receipt journal. Public-input plumbing (host-supplied
-> program / seed / step-cap), the on-chain `ZkExecutionMinter`, and testnet deployment
-> land in later phases. See [`CLAUDE.md`](./CLAUDE.md).
+> **Status (Phase 1.3b):** ERC-20 contract + tests, plus a Risc Zero zkVM circuit that
+> runs the [windy-lang](https://crates.io/crates/windy-lang) interpreter on a
+> host-supplied windy program inside the guest and commits `(program_hash, output_hash,
+> exit_code, steps)` to the receipt journal. The on-chain `ZkExecutionMinter` and
+> testnet deployment land in later phases. See [`CLAUDE.md`](./CLAUDE.md).
 
 ## Token spec (immutable)
 
@@ -30,11 +29,13 @@ contracts/         Foundry project
   lib/             OpenZeppelin v5.4.0, forge-std (git submodules)
 
 circuit/           Risc Zero zkVM workspace
-  guest/           zkVM guest: runs the windy-lang interpreter on `src/hello.wnd`
-                   (deterministic seed + step cap) and commits a `WindyJournal` of
+  guest/           zkVM guest: env::reads `WindyInput {program, seed, max_steps, stdin}`,
+                   runs the windy-lang interpreter, and commits a `WindyJournal` of
                    {program_hash, output_hash, exit_code, steps}
   methods/         build glue: compiles the guest into ELF + image ID constants
-  host/            host program: proves, decodes the journal, and verifies the receipt
+  host/            CLI: loads a windy program from disk (or the bundled default),
+                   writes it into ExecutorEnv, proves, decodes the journal, verifies
+  programs/        sample windy-lang programs (currently just `hello.wnd`)
 ```
 
 ## Build & test
@@ -63,8 +64,21 @@ Requires [`rzup`](https://dev.risczero.com/api/zkvm/install) (`curl -L https://r
 
 ```bash
 cd circuit
+# bundled default — runs programs/hello.wnd
 cargo run --release -p host
+
+# any windy program with custom seed and step cap
+cargo run --release -p host -- \
+  --program-file programs/hello.wnd \
+  --seed 42 \
+  --max-steps 50000
+
+# feed stdin to the program (e.g. for input-reading programs)
+cargo run --release -p host -- \
+  --program-file <path.wnd> --stdin-file <path.in>
 ```
+
+CLI defaults: `--seed 0`, `--max-steps 100_000`, no stdin. Without `--program-file`, the bundled `programs/hello.wnd` is used.
 
 The first build takes several minutes because it compiles the host-side Risc Zero stack and cross-compiles the guest (including the windy-lang interpreter) with the `risc0` Rust toolchain. On success the host prints:
 
@@ -77,7 +91,7 @@ guest journal:
 receipt verified
 ```
 
-`output_hash` matches `sha256("Hello, World!")` — the hardcoded `hello.wnd` program prints `Hello, World!` and halts. To see prover progress, set `RUST_LOG=info`.
+`output_hash` matches `sha256("Hello, World!")` — `hello.wnd` prints `Hello, World!` and halts. To see prover progress, set `RUST_LOG=info`.
 
 ## Trust model
 

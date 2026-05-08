@@ -43,9 +43,10 @@ windy-coin/
 │   ├── test/
 │   └── script/
 ├── circuit/            # Risc Zero zkVM workspace
-│   ├── guest/          # zkVM에서 실행될 windy-lang 인터프리터 (vendored)
+│   ├── guest/          # zkVM에서 실행될 windy-lang 인터프리터 (windy-lang crates.io dep)
 │   ├── methods/        # build.rs로 guest를 ELF + image ID 상수로 변환 (호스트가 import)
-│   └── host/           # proof 생성 호스트 프로그램
+│   ├── host/           # CLI: 프로그램/seed/max_steps를 ExecutorEnv로 주입, proof 생성/검증
+│   └── programs/       # 샘플 windy-lang 프로그램 (현재 hello.wnd)
 ├── scripts/            # 배포 / 채굴 CLI
 └── docs/
 ```
@@ -56,7 +57,7 @@ windy-coin/
 - [ ] Base Sepolia에 토큰 배포
 - [x] Risc Zero 환경 셋업 (hello-world prove + verify 통과)
 - [x] windy-lang 인터프리터를 zkVM guest로 포팅 (Phase 1.3a: hardcoded `hello.wnd` 실행, journal에 program/output hash + exit code + steps 커밋)
-- [ ] guest 프로그램: 인터프리터 실행 → 입력 commitment + 실행 결과를 public output
+- [x] guest 프로그램: 인터프리터 실행 → 입력 commitment + 실행 결과를 public output (Phase 1.3b: 호스트가 `WindyInput {program, seed, max_steps, stdin}`을 ExecutorEnv로 주입; journal의 program_hash가 입력 커밋, output_hash + exit_code + steps가 실행 결과 public output)
 - [ ] `ZkExecutionMinter.sol` — Risc Zero on-chain verifier 통합, proof 받으면 mint
 - [ ] 첫 채굴 성공 (testnet)
 - [ ] 외부 감사
