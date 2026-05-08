@@ -42,18 +42,19 @@ windy-coin/
 │   │   └── ZkExecutionMinter.sol # Phase 1 minter (Risc Zero verifier 통합)
 │   ├── test/
 │   └── script/
-├── circuit/            # Risc Zero
+├── circuit/            # Risc Zero zkVM workspace
 │   ├── guest/          # zkVM에서 실행될 windy-lang 인터프리터 (vendored)
+│   ├── methods/        # build.rs로 guest를 ELF + image ID 상수로 변환 (호스트가 import)
 │   └── host/           # proof 생성 호스트 프로그램
 ├── scripts/            # 배포 / 채굴 CLI
 └── docs/
 ```
 
 ## 개발 로드맵
-- [ ] Foundry 환경 셋업
-- [ ] `Windy.sol` 작성 + 테스트 (cap, role-gated mint, burn)
+- [x] Foundry 환경 셋업
+- [x] `Windy.sol` 작성 + 테스트 (cap, role-gated mint, burn)
 - [ ] Base Sepolia에 토큰 배포
-- [ ] Risc Zero 환경 셋업
+- [x] Risc Zero 환경 셋업 (hello-world prove + verify 통과)
 - [ ] windy-lang 인터프리터를 zkVM guest로 포팅
 - [ ] guest 프로그램: 인터프리터 실행 → 입력 commitment + 실행 결과를 public output
 - [ ] `ZkExecutionMinter.sol` — Risc Zero on-chain verifier 통합, proof 받으면 mint
