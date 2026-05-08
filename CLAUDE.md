@@ -55,7 +55,7 @@ windy-coin/
 - [x] `Windy.sol` 작성 + 테스트 (cap, role-gated mint, burn)
 - [ ] Base Sepolia에 토큰 배포
 - [x] Risc Zero 환경 셋업 (hello-world prove + verify 통과)
-- [ ] windy-lang 인터프리터를 zkVM guest로 포팅
+- [x] windy-lang 인터프리터를 zkVM guest로 포팅 (Phase 1.3a: hardcoded `hello.wnd` 실행, journal에 program/output hash + exit code + steps 커밋)
 - [ ] guest 프로그램: 인터프리터 실행 → 입력 commitment + 실행 결과를 public output
 - [ ] `ZkExecutionMinter.sol` — Risc Zero on-chain verifier 통합, proof 받으면 mint
 - [ ] 첫 채굴 성공 (testnet)

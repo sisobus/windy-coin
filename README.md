@@ -2,10 +2,12 @@
 
 Proof-of-Windy: ZK-verified windy-lang execution mining for the **WNDY** token on Base.
 
-> **Status (Phase 1.2):** ERC-20 contract + tests, plus a hello-world Risc Zero zkVM
-> skeleton (guest commits a fixed message, host generates and verifies a STARK receipt).
-> The on-chain `ZkExecutionMinter`, the windy-lang interpreter inside the guest, and
-> testnet deployment land in later phases. See [`CLAUDE.md`](./CLAUDE.md).
+> **Status (Phase 1.3a):** ERC-20 contract + tests, plus a Risc Zero zkVM circuit that
+> runs the [windy-lang](https://crates.io/crates/windy-lang) interpreter on a hardcoded
+> program (`hello.wnd`) inside the guest and commits `(program_hash, output_hash,
+> exit_code, steps)` to the receipt journal. Public-input plumbing (host-supplied
+> program / seed / step-cap), the on-chain `ZkExecutionMinter`, and testnet deployment
+> land in later phases. See [`CLAUDE.md`](./CLAUDE.md).
 
 ## Token spec (immutable)
 
@@ -28,9 +30,11 @@ contracts/         Foundry project
   lib/             OpenZeppelin v5.4.0, forge-std (git submodules)
 
 circuit/           Risc Zero zkVM workspace
-  guest/           zkVM guest (currently a hello-world: env::commit_slice(b"hello, windy"))
+  guest/           zkVM guest: runs the windy-lang interpreter on `src/hello.wnd`
+                   (deterministic seed + step cap) and commits a `WindyJournal` of
+                   {program_hash, output_hash, exit_code, steps}
   methods/         build glue: compiles the guest into ELF + image ID constants
-  host/            host program: builds an executor env, proves, and verifies the receipt
+  host/            host program: proves, decodes the journal, and verifies the receipt
 ```
 
 ## Build & test
@@ -62,14 +66,18 @@ cd circuit
 cargo run --release -p host
 ```
 
-The first build takes several minutes because it compiles the host-side Risc Zero stack and cross-compiles the guest with the `risc0` Rust toolchain. On success the host prints:
+The first build takes several minutes because it compiles the host-side Risc Zero stack and cross-compiles the guest (including the windy-lang interpreter) with the `risc0` Rust toolchain. On success the host prints:
 
 ```
-guest journal: hello, windy
+guest journal:
+  program_hash: 0x65e7d719acde91a75d7539d07ab34cc75e1a7aa711d7c76722ae5c601e798c96
+  output_hash:  0xdffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f
+  exit_code:    0 (Ok)
+  steps:        29
 receipt verified
 ```
 
-To see prover progress, set `RUST_LOG=info`.
+`output_hash` matches `sha256("Hello, World!")` — the hardcoded `hello.wnd` program prints `Hello, World!` and halts. To see prover progress, set `RUST_LOG=info`.
 
 ## Trust model
 
