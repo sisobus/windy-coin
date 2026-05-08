@@ -2,11 +2,12 @@
 
 Proof-of-Windy: ZK-verified windy-lang execution mining for the **WNDY** token on Base.
 
-> **Status (Phase 1.4b):** ERC-20 contract + tests, a Risc Zero zkVM circuit running
-> the [windy-lang](https://crates.io/crates/windy-lang) v2.1.0 interpreter, and an
-> on-chain `ZkExecutionMinter` (free-mint policy) wired against `IRiscZeroVerifier`
-> with Foundry tests using `RiscZeroMockVerifier`. Testnet deployment follows.
-> See [`CLAUDE.md`](./CLAUDE.md).
+> **Status (Phase 1.4c):** ERC-20 contract + tests, a Risc Zero zkVM circuit running
+> the [windy-lang](https://crates.io/crates/windy-lang) v2.1.0 interpreter, an on-chain
+> `ZkExecutionMinter` (free-mint policy) with Foundry tests against `RiscZeroMockVerifier`,
+> and the deployment artifacts (`script/Deploy.s.sol`, host `--print-image-id` flag,
+> Bonsai-aware on-chain payload printer). Actual Base Sepolia broadcast is user-driven —
+> the [Deployment](#deployment-base-sepolia) section is a runbook. See [`CLAUDE.md`](./CLAUDE.md).
 
 ## Token spec (immutable)
 
@@ -28,6 +29,7 @@ contracts/         Foundry project
   src/ZkExecutionMinter.sol   Phase 1 free-mint minter: verify + abi.decode + nonce dedup
   test/Windy.t.sol            Cap, role gating, burn, grant/revoke, renounce
   test/ZkExecutionMinter.t.sol Mock-verifier-backed proof flow + replay/tamper rejection
+  script/Deploy.s.sol         Base Sepolia / Base mainnet deploy + MINTER_ROLE grant
   lib/                        OpenZeppelin v5.4.0, forge-std, risc0-ethereum v3.0.1
 
 circuit/           Risc Zero zkVM workspace
@@ -100,6 +102,82 @@ receipt verified
 ```
 
 `output_hash` matches `sha256("Hello, World!")` — `hello.wnd` prints `Hello, World!` and halts. The `raw bytes` line is the ABI-encoded journal (6 fields × 32-byte slots) that an on-chain `ZkExecutionMinter` will `abi.decode`. To see prover progress, set `RUST_LOG=info`.
+
+## Deployment (Base Sepolia)
+
+The contracts are intentionally chain-agnostic — `ZkExecutionMinter` takes the verifier address, image ID, and reward as constructor arguments. Pin those at deploy time.
+
+### Risc Zero verifiers
+
+For Base, prefer the **router** (selector-based dispatch over the active verifier set) so a Risc Zero version bump on their side does not strand your minter:
+
+| Chain        | `IRiscZeroVerifier` to pass to the minter                          |
+| ------------ | ------------------------------------------------------------------ |
+| Base Sepolia | `0x0b144e07a0826182b6b59788c34b32bfa86fb711` (RiscZeroVerifierRouter) |
+| Base mainnet | `0x0b144e07a0826182b6b59788c34b32bfa86fb711` (RiscZeroVerifierRouter) |
+
+Source: [`risc0/risc0-ethereum/contracts/deployment.toml`](https://github.com/risc0/risc0-ethereum/blob/v3.0.1/contracts/deployment.toml).
+
+### 1. Read the guest IMAGE_ID
+
+```bash
+cd circuit
+cargo run --release -p host -- --print-image-id
+# 0x<32-byte hex>
+```
+
+The image ID is `sha256(guest ELF)` and changes whenever guest source changes. Pin it in the minter constructor.
+
+### 2. Run the deploy script
+
+```bash
+cd contracts
+export VERIFIER=0x0b144e07a0826182b6b59788c34b32bfa86fb711
+export IMAGE_ID=0x<paste from step 1>
+export REWARD=1000000000000000000     # 1 WNDY per accepted proof
+export BASE_SEPOLIA_RPC=https://sepolia.base.org
+export PRIVATE_KEY=0x<deployer key with Sepolia ETH>
+
+forge script script/Deploy.s.sol:Deploy \
+  --rpc-url $BASE_SEPOLIA_RPC \
+  --private-key $PRIVATE_KEY \
+  --broadcast --verify
+```
+
+The script deploys `Windy`, deploys `ZkExecutionMinter` against the verifier+image+reward triple, and grants `MINTER_ROLE` on the token to the minter. The deployer keeps `DEFAULT_ADMIN_ROLE` and can grant additional minters later.
+
+### 3. Generate a Groth16 proof and mint
+
+The local prover produces STARK receipts that are too large to verify on chain. For an on-chain mint, run the host through Bonsai (Risc Zero's hosted prover) so it returns a Groth16 receipt:
+
+```bash
+export BONSAI_API_URL=https://api.bonsai.xyz
+export BONSAI_API_KEY=<your bonsai key>
+
+cd circuit
+cargo run --release -p host -- \
+  --recipient 0x<your address>
+```
+
+The host now prints an additional block at the end:
+
+```
+on-chain payload (paste into `cast send`):
+  image_id: 0x...
+  seal:     0x...
+  journal:  0x...
+```
+
+### 4. Submit the mint transaction
+
+```bash
+cast send <minter address from step 2> \
+  "mint(bytes,bytes)" <seal> <journal> \
+  --rpc-url $BASE_SEPOLIA_RPC \
+  --private-key $PRIVATE_KEY
+```
+
+`msg.sender` of the mint call doesn't matter — `WNDY.mint` goes to the `recipient` committed inside the journal, so anyone can submit the transaction on behalf of the recipient (even a relayer paying gas).
 
 ## Trust model
 

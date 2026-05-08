@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use alloy_sol_types::SolValue;
 use clap::Parser;
 use methods::{WINDY_GUEST_ELF, WINDY_GUEST_ID};
-use risc0_zkvm::{default_prover, ExecutorEnv};
+use risc0_zkvm::{default_prover, sha::Digest, ExecutorEnv};
 use windy_circuit_core::{WindyInput, WindyJournalSol};
 
 const DEFAULT_PROGRAM: &str = include_str!("../../programs/hello.wnd");
@@ -12,10 +12,16 @@ const DEFAULT_PROGRAM: &str = include_str!("../../programs/hello.wnd");
 #[derive(Parser)]
 #[command(version, about)]
 struct Cli {
+    /// Print the guest IMAGE_ID (bytes32, suitable for ZkExecutionMinter
+    /// deployment) and exit. No proof is generated.
+    #[arg(long)]
+    print_image_id: bool,
+
     /// Recipient Ethereum address that the on-chain minter will mint to.
-    /// Bound into the proof so a third party cannot replay it for someone else.
+    /// Required unless `--print-image-id`. Bound into the proof so a third
+    /// party cannot replay it for someone else.
     #[arg(long, value_parser = parse_address)]
-    recipient: [u8; 20],
+    recipient: Option<[u8; 20]>,
 
     /// Optional 32-byte nonce, hex-encoded. Random if omitted.
     /// The on-chain minter uses this to dedupe replays.
@@ -76,12 +82,25 @@ fn exit_label(code: i32) -> &'static str {
     }
 }
 
+fn image_id_bytes() -> [u8; 32] {
+    Digest::from(WINDY_GUEST_ID).into()
+}
+
 fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::filter::EnvFilter::from_default_env())
         .init();
 
     let cli = Cli::parse();
+
+    if cli.print_image_id {
+        println!("0x{}", hex::encode(image_id_bytes()));
+        return;
+    }
+
+    let recipient = cli
+        .recipient
+        .expect("--recipient is required (or pass --print-image-id)");
 
     let program = match cli.program_file {
         Some(path) => std::fs::read_to_string(&path)
@@ -102,7 +121,7 @@ fn main() {
         seed: cli.seed,
         max_steps: cli.max_steps,
         stdin,
-        recipient: cli.recipient,
+        recipient,
         nonce,
     };
 
@@ -136,4 +155,20 @@ fn main() {
         .verify(WINDY_GUEST_ID)
         .expect("receipt failed verification");
     println!("receipt verified");
+
+    println!();
+    match receipt.inner.groth16() {
+        Ok(groth16) => {
+            println!("on-chain payload (paste into `cast send`):");
+            println!("  image_id: 0x{}", hex::encode(image_id_bytes()));
+            println!("  seal:     0x{}", hex::encode(&groth16.seal));
+            println!("  journal:  0x{}", hex::encode(&receipt.journal.bytes));
+        }
+        Err(_) => {
+            println!("on-chain payload: not available — the local prover produced a");
+            println!("STARK receipt, which is too large to verify on chain. Set");
+            println!("BONSAI_API_URL + BONSAI_API_KEY (or RISC0_PROVER=bonsai) and");
+            println!("re-run to get a Groth16 seal suitable for ZkExecutionMinter.mint().");
+        }
+    }
 }
