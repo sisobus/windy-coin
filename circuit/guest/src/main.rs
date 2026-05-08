@@ -1,7 +1,9 @@
+use alloy_primitives::{Address, B256};
+use alloy_sol_types::SolValue;
 use risc0_zkvm::guest::env;
 use sha2::{Digest, Sha256};
 use windy::{parse, ExitCode, Vm};
-use windy_circuit_core::{WindyInput, WindyJournal};
+use windy_circuit_core::{WindyInput, WindyJournalSol};
 
 fn main() {
     let input: WindyInput = env::read();
@@ -18,12 +20,14 @@ fn main() {
     let program_hash: [u8; 32] = Sha256::digest(input.program.as_bytes()).into();
     let output_hash: [u8; 32] = Sha256::digest(&stdout).into();
 
-    let journal = WindyJournal {
-        program_hash,
-        output_hash,
-        exit_code: exit.code(),
+    let journal = WindyJournalSol {
+        recipient: Address::from(input.recipient),
+        nonce: B256::from(input.nonce),
+        programHash: B256::from(program_hash),
+        outputHash: B256::from(output_hash),
+        exitCode: exit.code(),
         steps: vm.steps,
     };
 
-    env::commit(&journal);
+    env::commit_slice(&journal.abi_encode());
 }

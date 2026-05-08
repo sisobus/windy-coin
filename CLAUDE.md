@@ -59,7 +59,8 @@ windy-coin/
 - [x] Risc Zero 환경 셋업 (hello-world prove + verify 통과)
 - [x] windy-lang 인터프리터를 zkVM guest로 포팅 (Phase 1.3a: hardcoded `hello.wnd` 실행, journal에 program/output hash + exit code + steps 커밋)
 - [x] guest 프로그램: 인터프리터 실행 → 입력 commitment + 실행 결과를 public output (Phase 1.3b: 호스트가 `WindyInput {program, seed, max_steps, stdin}`을 ExecutorEnv로 주입; journal의 program_hash가 입력 커밋, output_hash + exit_code + steps가 실행 결과 public output)
-- [ ] `ZkExecutionMinter.sol` — Risc Zero on-chain verifier 통합, proof 받으면 mint
+- [x] journal에 recipient/nonce 추가 + ABI encoding (Phase 1.4a: alloy `sol!` 매크로로 `WindyJournalSol`, `commit_slice`로 192-byte ABI payload — Solidity가 `abi.decode`로 직접 파싱)
+- [ ] `ZkExecutionMinter.sol` — Risc Zero on-chain verifier 통합, proof 받으면 mint (Phase 1.4b: free-mint 정책으로 시작 — valid proof + nonce 미사용 → recipient에 고정 보상 mint)
 - [ ] 첫 채굴 성공 (testnet)
 - [ ] 외부 감사
 - [ ] Base mainnet 배포

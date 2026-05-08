@@ -1,9 +1,10 @@
 use std::path::PathBuf;
 
+use alloy_sol_types::SolValue;
 use clap::Parser;
 use methods::{WINDY_GUEST_ELF, WINDY_GUEST_ID};
 use risc0_zkvm::{default_prover, ExecutorEnv};
-use windy_circuit_core::{WindyInput, WindyJournal};
+use windy_circuit_core::{WindyInput, WindyJournalSol};
 
 const DEFAULT_PROGRAM: &str = include_str!("../../programs/hello.wnd");
 
@@ -11,6 +12,16 @@ const DEFAULT_PROGRAM: &str = include_str!("../../programs/hello.wnd");
 #[derive(Parser)]
 #[command(version, about)]
 struct Cli {
+    /// Recipient Ethereum address that the on-chain minter will mint to.
+    /// Bound into the proof so a third party cannot replay it for someone else.
+    #[arg(long, value_parser = parse_address)]
+    recipient: [u8; 20],
+
+    /// Optional 32-byte nonce, hex-encoded. Random if omitted.
+    /// The on-chain minter uses this to dedupe replays.
+    #[arg(long, value_parser = parse_b256)]
+    nonce: Option<[u8; 32]>,
+
     /// Path to a windy-lang source file. If omitted, the bundled `hello.wnd` is used.
     #[arg(long, value_name = "PATH")]
     program_file: Option<PathBuf>,
@@ -26,6 +37,34 @@ struct Cli {
     /// Optional file to feed as stdin to the windy program.
     #[arg(long, value_name = "PATH")]
     stdin_file: Option<PathBuf>,
+}
+
+fn parse_address(s: &str) -> Result<[u8; 20], String> {
+    let s = s.strip_prefix("0x").unwrap_or(s);
+    let bytes = hex::decode(s).map_err(|e| format!("invalid hex: {e}"))?;
+    if bytes.len() != 20 {
+        return Err(format!(
+            "expected 20 bytes (40 hex chars), got {}",
+            bytes.len()
+        ));
+    }
+    let mut arr = [0u8; 20];
+    arr.copy_from_slice(&bytes);
+    Ok(arr)
+}
+
+fn parse_b256(s: &str) -> Result<[u8; 32], String> {
+    let s = s.strip_prefix("0x").unwrap_or(s);
+    let bytes = hex::decode(s).map_err(|e| format!("invalid hex: {e}"))?;
+    if bytes.len() != 32 {
+        return Err(format!(
+            "expected 32 bytes (64 hex chars), got {}",
+            bytes.len()
+        ));
+    }
+    let mut arr = [0u8; 32];
+    arr.copy_from_slice(&bytes);
+    Ok(arr)
 }
 
 fn exit_label(code: i32) -> &'static str {
@@ -56,11 +95,15 @@ fn main() {
         None => Vec::new(),
     };
 
+    let nonce = cli.nonce.unwrap_or_else(rand::random);
+
     let input = WindyInput {
         program,
         seed: cli.seed,
         max_steps: cli.max_steps,
         stdin,
+        recipient: cli.recipient,
+        nonce,
     };
 
     let env = ExecutorEnv::builder()
@@ -73,20 +116,21 @@ fn main() {
     let prove_info = prover.prove(env, WINDY_GUEST_ELF).unwrap();
     let receipt = prove_info.receipt;
 
-    let journal: WindyJournal = receipt
-        .journal
-        .decode()
-        .expect("guest journal must decode as WindyJournal");
+    let journal = WindyJournalSol::abi_decode_validate(&receipt.journal.bytes)
+        .expect("guest journal must abi-decode as WindyJournalSol");
 
     println!("guest journal:");
-    println!("  program_hash: 0x{}", hex::encode(journal.program_hash));
-    println!("  output_hash:  0x{}", hex::encode(journal.output_hash));
+    println!("  recipient:    0x{}", hex::encode(journal.recipient));
+    println!("  nonce:        0x{}", hex::encode(journal.nonce));
+    println!("  program_hash: 0x{}", hex::encode(journal.programHash));
+    println!("  output_hash:  0x{}", hex::encode(journal.outputHash));
     println!(
         "  exit_code:    {} ({})",
-        journal.exit_code,
-        exit_label(journal.exit_code)
+        journal.exitCode,
+        exit_label(journal.exitCode)
     );
     println!("  steps:        {}", journal.steps);
+    println!("  raw bytes:    {} (abi-encoded)", receipt.journal.bytes.len());
 
     receipt
         .verify(WINDY_GUEST_ID)

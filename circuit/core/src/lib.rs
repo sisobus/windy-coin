@@ -1,9 +1,11 @@
 //! Shared types for the windy-coin Risc Zero circuit.
 //!
-//! `WindyInput` is what the host writes into `ExecutorEnv` and the
-//! guest reads via `env::read`. `WindyJournal` is what the guest
-//! commits to the receipt journal — public output that both the host
-//! and an on-chain verifier read.
+//! - `WindyInput` is the host→guest payload, written via
+//!   `ExecutorEnv::write` and read via `env::read`. Stays in risc0's
+//!   serde format because no on-chain code reads it.
+//! - `WindyJournalSol` is the guest→world payload, ABI-encoded and
+//!   committed via `env::commit_slice`. Solidity (or any caller using
+//!   `abi.decode`) can parse it directly.
 
 #![no_std]
 
@@ -19,12 +21,21 @@ pub struct WindyInput {
     pub seed: u64,
     pub max_steps: u64,
     pub stdin: Vec<u8>,
+    pub recipient: [u8; 20],
+    pub nonce: [u8; 32],
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct WindyJournal {
-    pub program_hash: [u8; 32],
-    pub output_hash: [u8; 32],
-    pub exit_code: i32,
-    pub steps: u64,
+alloy_sol_types::sol! {
+    /// Public output committed by the guest. The ABI-encoded bytes of
+    /// this struct are exactly what `receipt.journal.bytes` contains, so
+    /// `ZkExecutionMinter` can do `abi.decode(journal, (WindyJournalSol))`.
+    #[derive(Debug)]
+    struct WindyJournalSol {
+        address recipient;
+        bytes32 nonce;
+        bytes32 programHash;
+        bytes32 outputHash;
+        int32 exitCode;
+        uint64 steps;
+    }
 }

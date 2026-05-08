@@ -10,3 +10,6 @@ risc0-zkvm = { version = "^3.0.5" }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 hex = "0.4"
 clap = { version = "4", features = ["derive"] }
+alloy-sol-types = "1"
+alloy-primitives = "1"
+rand = "0.9"
