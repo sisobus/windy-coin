@@ -1,23 +1,7 @@
 use risc0_zkvm::guest::env;
-use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use windy::{parse, ExitCode, Vm};
-
-#[derive(Serialize, Deserialize)]
-pub struct WindyInput {
-    pub program: String,
-    pub seed: u64,
-    pub max_steps: u64,
-    pub stdin: Vec<u8>,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct WindyJournal {
-    pub program_hash: [u8; 32],
-    pub output_hash: [u8; 32],
-    pub exit_code: i32,
-    pub steps: u64,
-}
+use windy_circuit_core::{WindyInput, WindyJournal};
 
 fn main() {
     let input: WindyInput = env::read();

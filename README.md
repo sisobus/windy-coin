@@ -29,6 +29,7 @@ contracts/         Foundry project
   lib/             OpenZeppelin v5.4.0, forge-std (git submodules)
 
 circuit/           Risc Zero zkVM workspace
+  core/            shared no_std crate: WindyInput + WindyJournal types
   guest/           zkVM guest: env::reads `WindyInput {program, seed, max_steps, stdin}`,
                    runs the windy-lang interpreter, and commits a `WindyJournal` of
                    {program_hash, output_hash, exit_code, steps}

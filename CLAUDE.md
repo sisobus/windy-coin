@@ -43,6 +43,7 @@ windy-coin/
 │   ├── test/
 │   └── script/
 ├── circuit/            # Risc Zero zkVM workspace
+│   ├── core/           # WindyInput/WindyJournal 공유 타입 (no_std, guest+host 양쪽 사용)
 │   ├── guest/          # zkVM에서 실행될 windy-lang 인터프리터 (windy-lang crates.io dep)
 │   ├── methods/        # build.rs로 guest를 ELF + image ID 상수로 변환 (호스트가 import)
 │   ├── host/           # CLI: 프로그램/seed/max_steps를 ExecutorEnv로 주입, proof 생성/검증

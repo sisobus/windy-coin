@@ -3,25 +3,9 @@ use std::path::PathBuf;
 use clap::Parser;
 use methods::{WINDY_GUEST_ELF, WINDY_GUEST_ID};
 use risc0_zkvm::{default_prover, ExecutorEnv};
-use serde::{Deserialize, Serialize};
+use windy_circuit_core::{WindyInput, WindyJournal};
 
 const DEFAULT_PROGRAM: &str = include_str!("../../programs/hello.wnd");
-
-#[derive(Serialize, Deserialize)]
-pub struct WindyInput {
-    pub program: String,
-    pub seed: u64,
-    pub max_steps: u64,
-    pub stdin: Vec<u8>,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct WindyJournal {
-    pub program_hash: [u8; 32],
-    pub output_hash: [u8; 32],
-    pub exit_code: i32,
-    pub steps: u64,
-}
 
 /// Generate a Risc Zero proof of running a windy-lang program in the zkVM guest.
 #[derive(Parser)]
