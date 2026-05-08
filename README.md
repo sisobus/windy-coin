@@ -2,11 +2,10 @@
 
 Proof-of-Windy: ZK-verified windy-lang execution mining for the **WNDY** token on Base.
 
-> **Status (Phase 1.4a):** ERC-20 contract + tests, plus a Risc Zero zkVM circuit that
-> runs the [windy-lang](https://crates.io/crates/windy-lang) v2.1.0 interpreter on a
-> host-supplied program. The guest commits an **ABI-encoded** journal of `(recipient,
-> nonce, programHash, outputHash, exitCode, steps)` — exactly the layout `ZkExecutionMinter`
-> will `abi.decode`. The on-chain minter contract and testnet deployment follow.
+> **Status (Phase 1.4b):** ERC-20 contract + tests, a Risc Zero zkVM circuit running
+> the [windy-lang](https://crates.io/crates/windy-lang) v2.1.0 interpreter, and an
+> on-chain `ZkExecutionMinter` (free-mint policy) wired against `IRiscZeroVerifier`
+> with Foundry tests using `RiscZeroMockVerifier`. Testnet deployment follows.
 > See [`CLAUDE.md`](./CLAUDE.md).
 
 ## Token spec (immutable)
@@ -25,9 +24,11 @@ Proof-of-Windy: ZK-verified windy-lang execution mining for the **WNDY** token o
 
 ```
 contracts/         Foundry project
-  src/Windy.sol    ERC-20 + Burnable + AccessControl, hard cap enforced
-  test/Windy.t.sol Cap, role gating, burn, grant/revoke, renounce
-  lib/             OpenZeppelin v5.4.0, forge-std (git submodules)
+  src/Windy.sol               ERC-20 + Burnable + AccessControl, hard cap enforced
+  src/ZkExecutionMinter.sol   Phase 1 free-mint minter: verify + abi.decode + nonce dedup
+  test/Windy.t.sol            Cap, role gating, burn, grant/revoke, renounce
+  test/ZkExecutionMinter.t.sol Mock-verifier-backed proof flow + replay/tamper rejection
+  lib/                        OpenZeppelin v5.4.0, forge-std, risc0-ethereum v3.0.1
 
 circuit/           Risc Zero zkVM workspace
   core/            shared no_std crate:
