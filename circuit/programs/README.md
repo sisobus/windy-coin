@@ -2,22 +2,39 @@
 
 Hand-picked windy-lang programs from [`sisobus/windy/examples`](https://github.com/sisobus/windy/tree/main/examples) plus the bundled hello.
 
-Each program is run end-to-end through the zkVM guest by the host CLI. Below is the
-deterministic journal that the **current guest** (`IMAGE_ID =
-0xe6c387f29e2a318dabe3be9b2a9fd3c567cfb907c962e462eb7231e46c876df4`) emits when
-called with `--seed 0 --max-steps 100000` and an arbitrary fixed
-recipient/nonce. These hashes are a regression baseline — if the guest source
-changes, `IMAGE_ID` changes and these are expected to drift; otherwise they
-should be byte-stable.
+Each program is run end-to-end through the zkVM guest with `--seed 0
+--max-steps 100000` and an arbitrary fixed recipient/nonce. The
+metrics in the table below are the v2 journal fields fed to the
+[Phase 2 mining policy](../../docs/PHASE-2-MINING.md) — `visited` is
+the trace-truth code size (cells the IP actually executed at; comments
+and unreachable signature blocks don't count), and the others come
+from the windy-lang `metrics` feature.
 
-| Program           | Bytes | Steps | exit | `output_hash` (sha256 of stdout)                                       |
-| ----------------- | ----: | ----: | ---- | ---------------------------------------------------------------------- |
-| `hello.wnd`       |    30 |    29 |  Ok  | `0xdffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f` * |
-| `hello_winds.wnd` |   121 |   107 |  Ok  | `0xdffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f` * |
-| `hi_windy.wnd`    |   216 |   102 |  Ok  | `0x5b4189a984989aeb2ec768645241c8b7e64d0dee3a2f256cd6131b55c60e67d3`   |
-| `sum_winds.wnd`   |    97 |    24 |  Ok  | `0xcf0eb12f371a790871ed93abd79781ab182f16f5a36d38895a19458fb7a71c8e`   |
-| `fib.wnd`         |   277 |   764 |  Ok  | `0xc8337b3ac92c650dfba406dbb2d4598465bb2537e6d2120cbd84f62606c41185`   |
-| `factorial.wnd`   |  1031 |   912 |  Ok  | `0xb610a2b561fc930a0fc146987a95ef93cde26a00eeb6af567748e043c6e18aa4`   |
+The metric numbers are pinned to the **current guest** — if either
+the guest source or the windy-lang version changes, `IMAGE_ID`
+changes and the regression baseline is expected to drift.
+
+| Program           | Bytes | Steps | visited | maxIPs | spawn | writes | branch | hard-ops    | exit |
+| ----------------- | ----: | ----: | ------: | -----: | ----: | -----: | -----: | :---------- | :--- |
+| `hello.wnd`       |    30 |    29 |      29 |      1 |     0 |      0 |      0 | `"`         | Ok   |
+| `hello_winds.wnd` |   121 |   107 |      30 |      1 |     0 |      0 |     14 | `_ # "`     | Ok   |
+| `sum_winds.wnd`   |    97 |    24 |      24 |      2 |     1 |      0 |      0 | `t`         | Ok   |
+| `hi_windy.wnd`    |   216 |   102 |      49 |      2 |     1 |      0 |     10 | `t _ # "`   | Ok   |
+| `fib.wnd`         |   277 |   764 |     100 |      1 |     0 |     33 |     10 | `p g \|`    | Ok   |
+| `factorial.wnd`   |  1031 |   912 |     113 |      1 |     0 |     22 |     10 | `p g \|`    | Ok   |
+| `puzzle_hard.wnd` |  3431 |    18 |      15 |      4 |     3 |      0 |      0 | `t`         | Ok   |
+
+Output digests (SHA-256 of stdout, deterministic for these programs since none use `~`):
+
+| Program           | `output_hash`                                                          |
+| ----------------- | ---------------------------------------------------------------------- |
+| `hello.wnd`       | `0xdffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f` * |
+| `hello_winds.wnd` | `0xdffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f` * |
+| `hi_windy.wnd`    | `0x5b4189a984989aeb2ec768645241c8b7e64d0dee3a2f256cd6131b55c60e67d3`   |
+| `sum_winds.wnd`   | `0xcf0eb12f371a790871ed93abd79781ab182f16f5a36d38895a19458fb7a71c8e`   |
+| `fib.wnd`         | `0xc8337b3ac92c650dfba406dbb2d4598465bb2537e6d2120cbd84f62606c41185`   |
+| `factorial.wnd`   | `0xb610a2b561fc930a0fc146987a95ef93cde26a00eeb6af567748e043c6e18aa4`   |
+| `puzzle_hard.wnd` | `0xa3a2a5f918f186fbf86c27f190a7b1fc83fb7c3ac0efbc82d4239c82d06c54ef`   |
 
 \* `hello.wnd` and `hello_winds.wnd` produce the same `output_hash` because they
 both print exactly the string `Hello, World!` — `output_hash` is `sha256(stdout)`,

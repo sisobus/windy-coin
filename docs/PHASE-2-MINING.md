@@ -51,7 +51,7 @@ uses, with weights, is the diversity contribution to the score.
 ## 3. Inputs (added to journal)
 
 The Phase 1 journal carries `(recipient, nonce, programHash, outputHash,
-exitCode, steps)`. Phase 2 adds **seven** more fields, all measured by the
+exitCode, steps)`. Phase 2 adds **eight** more fields, all measured by the
 guest at execution time and committed alongside the existing six:
 
 | Field              | Type      | Source                                                        |
@@ -61,8 +61,9 @@ guest at execution time and committed alongside the existing six:
 | `spawnedIps`       | `uint64`  | total `t` invocations (including from spawned IPs)            |
 | `gridWrites`       | `uint64`  | total `p` invocations                                         |
 | `branchCount`      | `uint64`  | total `_` + `\|` + `~` invocations                            |
-| `effectiveCells`   | `uint32`  | non-NOP cells in the source grid (after parse)                |
-| `totalGridCells`   | `uint32`  | width × height of the bounding box of the parsed grid         |
+| `visitedCells`     | `uint64`  | distinct `(x, y)` cells some IP actually executed at — the **trace-truth code size** |
+| `effectiveCells`   | `uint32`  | non-NOP cells in the parsed source grid (advisory)            |
+| `totalGridCells`   | `uint32`  | width × height of the bounding box of the parsed grid (advisory) |
 
 `hardOpcodeBitmap` bit assignments (low bit first): `t`, `p`, `g`, `_`, `|`,
 `≫`, `≪`, `~`, `#`, `"`. Bits 10–15 are reserved.
@@ -70,6 +71,21 @@ guest at execution time and committed alongside the existing six:
 These are all *dynamic* counters, populated by the windy interpreter inside
 the zkVM guest. The host never measures them — only the guest's measurements
 are bound into the proof. A liar gets caught at `verify()` time.
+
+`visitedCells` is the metric that replaces "how big is this program?" duty
+in the policy below. The earlier draft used `effectiveCells` (the parse-time
+count of non-NOP cells), which got inflated by punctuation in sisobus
+signatures and comment tables — `puzzle_hard.wnd` reads as 17 cells of real
+code plus a 770-cell write-up, and `effectiveCells` couldn't distinguish
+them. `visitedCells` only counts cells the IP actually ran on, so commented
+rows and unreachable signatures never count.
+
+`effectiveCells` and `totalGridCells` are kept on the journal as advisory
+metrics: they expose the static layout (their ratio is a "density" hint
+useful to off-chain analytics), but the on-chain policy does not gate on
+them. A miner who packs their source as densely as possible and a miner
+who pads their source with a sisobus banner are graded identically, as
+long as the IP traces the same number of cells.
 
 ### Updated `WindyJournalSol`
 
@@ -86,10 +102,11 @@ struct WindyJournalSol {
     uint64  spawnedIps;
     uint64  gridWrites;
     uint64  branchCount;
+    uint64  visitedCells;
     uint32  effectiveCells;
     uint32  totalGridCells;
 }
-// ABI-encoded: 13 head slots × 32 bytes = 416 bytes (Phase 1: 192 bytes)
+// ABI-encoded: 14 head slots × 32 bytes = 448 bytes (Phase 1: 192 bytes)
 ```
 
 ## 4. Eligibility gate
@@ -101,8 +118,7 @@ consolation, no state change.
 ```
 require !consumedProgram[programHash]                  // first-claim only
 require !consumedNonce[nonce]                          // standard replay protection
-require 10 ≤ effectiveCells ≤ 300
-require effectiveCells × 100 ≥ totalGridCells × 20    // density ≥ 0.20
+require 10 ≤ visitedCells ≤ 1500                       // honest-program size
 ```
 
 The `consumedProgram` cut implements goal 3 directly: a `program_hash` is
@@ -112,13 +128,23 @@ windy source race to the chain — exactly one mint, even though they each
 generated a valid proof. (A losing miner pays gas but no token; the
 losing transaction reverts before any state writes.)
 
-The `effectiveCells` cut excludes both noise (< 10 effective cells, e.g.
-`@`) and oversized programs (> 300 cells, which we won't reward at all
-in Phase 2 — they're a different design space).
+The `visitedCells` cut excludes both noise (< 10 cells executed —
+trivial programs like `@`) and oversized programs (> 1500 cells, where
+the policy stops being calibrated; that range is reserved for Phase 3+).
+Because `visitedCells` only counts cells the IP actually traced, a
+miner can put as much sisobus signature / commentary / dead code as
+they like into the source — none of it inflates the count, and none of
+it shrinks the count either.
 
-The density cut prevents "huge grid + sprinkled hard opcodes" spam: a
-100×100 grid that holds only 10 meaningful cells has density 0.001 and
-fails the gate even though every other metric is fine.
+> **No density gate.** Earlier drafts of this spec gated on
+> `effectiveCells / totalGridCells ≥ 0.20` to block huge-grid spam
+> ("100×100 cells with ten hard opcodes scattered, IP visits the
+> ten"). With `visitedCells` as the eligibility metric, that scenario
+> already loses on its own merits: a `visitedCells = 10` proof
+> produces a tiny score (because all the *other* metrics are zero too)
+> and the multiplicative diversity factor in §5 then multiplies that
+> tiny core by ≤ ~3 — not enough to clear Bronze. The density gate
+> would be redundant, so we drop it.
 
 ## 5. Score formula
 
@@ -131,29 +157,51 @@ diversityWeighted =
     + 1·"
                                    (max 41 if all ten flags set)
 
-spawnedDensity = spawnedIps / effectiveCells
+spawnedDensity = spawnedIps / max(visitedCells, 1)
 spawnedScore   = (spawnedDensity > 0.5)
                    ? 0
                    : min(spawnedIps, 20) × 1.5      (max 30)
 
-score = diversityWeighted
-      + ⌊log2(max(maxAliveIps, 1))⌋ × 10           (1→0, 2→10, 4→20, 16→40, 1024→100)
-      + spawnedScore
-      + min(gridWrites,  100) × 0.3                (max 30)
-      + min(branchCount, 100) × 0.2                (max 20)
+core = ⌊log2(max(maxAliveIps, 1))⌋ × 10            (1→0, 2→10, 4→20, 16→40, 1024→100)
+     + spawnedScore
+     + min(gridWrites,  100) × 0.3                 (max 30)
+     + min(branchCount, 100) × 0.2                 (max 20)
+
+# diversityWeighted does not contribute additively; it scales `core`.
+# Range: 1.00 (no hard opcodes) to ~3.05 (all ten — only achievable
+# from a non-zero core, since pure diversity with no other metric
+# multiplies a zero core to zero).
+diversityFactor = 1 + diversityWeighted × 5 / 100   (integer math: ×5 then ÷100)
+
+score = core × diversityFactor
 ```
 
-The `spawnedDensity > 0.5` clause kills the "100 `t`s in a row" attack: any
-program that spends more than half of its meaningful cells on SPLIT keeps
-its `maxAliveIps` boost but loses the spawned-count bonus. A real timing
-puzzle like `puzzle_hard.wnd` (3 spawns / 17 cells = 0.18 density) sails
-through.
+**Why diversity is multiplicative, not additive.** The earlier draft
+treated `diversityWeighted` as a fifth additive bucket. That made
+"huge-grid spam with all ten hard opcodes scattered, IP visits the
+ten" reach Silver on diversity alone (41 points) — which is exactly
+the wrong outcome. With diversity as a multiplier, that same
+adversary's `core` is zero (no real multi-IP, no real grid writes,
+no real branches), and `0 × 3.05` is still `0`. Real programs hit
+both axes — they spawn IPs *and* write to grid memory *and* branch *and*
+use a few hard opcodes — so they're rewarded for the combination, not
+for any one metric in isolation.
 
-All four sums are clamped at finite ceilings, so an adversary cannot push
-the score arbitrarily high by inflating any one metric. Realistic max is
-about 161; reaching it requires *every* hard opcode plus heavy multi-IP
-plus 100+ grid writes plus 100+ branches inside a 300-cell grid — at which
-point we're glad to mint Gold for it.
+**Why the t-spam guard is keyed on `visitedCells`.** A program of the
+shape `tttt…@` (a hundred SPLITs in a row) has high `spawnedIps` but
+also high `visitedCells` — every cell of the chain gets executed, so
+the ratio `spawned / visited` ≈ 1.0, well above the 0.5 cutoff. The
+spawned bonus is zeroed and the only contribution left to `core` is
+`log2(max_alive_ips) × 10`, which is bounded by how many IPs survive
+the collision-merge tick. A real timing puzzle like `puzzle_hard.wnd`
+(3 spawns / 15 visited cells = 0.20 ratio) clears the cutoff and gets
+the spawned bonus.
+
+All four `core` summands are clamped at finite ceilings, so an
+adversary cannot push the score arbitrarily high by inflating any one
+metric. The realistic max for `core` is around 130 (40 + 30 + 30 + 20
++ slack), which a 3.05× diversity factor takes to around 396 —
+comfortably above the Gold floor without being a runaway.
 
 ## 6. Tier dispatch
 
@@ -176,24 +224,44 @@ WNDY keeps the 21M supply curve realistic.
 
 ## 7. Sample programs against this policy
 
-Estimated; exact values land once the guest is instrumented.
+Measured against `windy-lang` v2.2.1 with the `metrics` feature on,
+running each program through the windy-coin guest with seed 0 and
+the default `--max-steps 100000`.
 
-| Program             | bytes | hard ops              | maxIPs | grid writes | branches | density | score (est.) | tier   |
-| ------------------- | ----: | --------------------- | -----: | ----------: | -------: | ------: | -----------: | ------ |
-| `random.ts` output  |     ~ | none                  |      1 |           0 |        0 |    1.00 |        **0** | None   |
-| `hello.wnd`         |    30 | `"`                   |      1 |           0 |        0 |    1.00 |        **1** | None   |
-| `hello_winds.wnd`   |   121 | `"`,`#`(?)            |      1 |           0 |        0 |    ~0.7 |       **3+** | None   |
-| `puzzle_hard.wnd`   |   ~250|  `t`                  |      4 |           0 |        0 |    1.00 |     **32.5** | Silver |
-| `fib.wnd`           |   277 | `g`,`p`,`_` or `\|`   |      1 |         ~10 |      ~10 |    ~0.7 |       **27** | Bronze |
-| `factorial.wnd`     |  1031 | `g`,`p`,`_` or `\|`   |      1 |         ~50 |      ~10 |    ~0.7 |       **39** | Silver |
-| `t`-spam (`tttt…@`) |   ~20 | `t`                   |    100 |           0 |        0 |    1.00 |       *gate* | None (spawnedDensity=1) |
-| Grid-spam (100×100) | 10000 | all 10                |      1 |           1 |        1 |   0.001 |       *gate* | None (density 0.001) |
+| Program             | visited | maxIPs | spawned | writes | branches | div_w | core  | factor | score    | tier    |
+| ------------------- | ------: | -----: | ------: | -----: | -------: | ----: | ----: | -----: | -------: | ------- |
+| `random.ts` output  |       ~ |      1 |       0 |      0 |        0 |     0 |   0.0 |   1.00 |    **0** | None    |
+| `hello.wnd`         |      29 |      1 |       0 |      0 |        0 |     1 |   0.0 |   1.05 |    **0** | None    |
+| `hello_winds.wnd`   |      30 |      1 |       0 |      0 |       14 |     7 |   2.8 |   1.35 |  **3.78** | None    |
+| `sum_winds.wnd`     |      24 |      2 |       1 |      0 |        0 |     8 |  11.5 |   1.40 | **16.10** | Bronze  |
+| `hi_windy.wnd`      |      49 |      2 |       1 |      0 |       10 |    15 |  13.5 |   1.75 | **23.62** | Bronze  |
+| `fib.wnd`           |     100 |      1 |       0 |     33 |       10 |    18 |  11.9 |   1.90 | **22.61** | Bronze  |
+| `factorial.wnd`     |     113 |      1 |       0 |     22 |       10 |    18 |   8.6 |   1.90 | **16.34** | Bronze  |
+| `puzzle_hard.wnd`   |      15 |      4 |       3 |      0 |        0 |     8 |  24.5 |   1.40 | **34.30** | Silver  |
+| `t`-spam (`tttt…@`) |     100 |     50 |     100 |      0 |        0 |     8 |  ~57  |   1.40 |    ~80   | Silver  |
+| Grid-spam (100×100) |      10 |      1 |       0 |      0 |        0 |    41 |   0.0 |   3.05 |    **0** | None    |
 
-`hello.wnd` and `random.ts` output both score below 10 — exactly the
-intended outcome. `puzzle_hard.wnd` lands at Silver, matching its
-"genuinely hard but not the absolute peak" character. `factorial.wnd`
-reaches Silver via grid-memory weight; `fib.wnd` is borderline Bronze
-because it does the same kind of work in fewer steps.
+`hello.wnd` and `random.ts` output both score zero (or near it) —
+exactly the intended outcome. `puzzle_hard.wnd` lands at Silver,
+matching its "genuinely hard timing-puzzle but not the absolute peak"
+character. `fib.wnd` and `factorial.wnd` settle at Bronze: heavy
+grid-memory work without the multi-IP boost.
+
+The `t`-spam row is the policy's edge case. A program that's just
+SPLITs in a line *does* land at Silver here — it has 50+ alive IPs and
+that's what `core` rewards. We accept that: a windy program that puts
+50 IPs onto the grid simultaneously is, in some real sense, doing more
+work than `hello.wnd`. If a future operator finds that real spam
+mining concentrates on this shape, the next minter version can either
+gate `core` on `visitedCells / spawnedIps > 1` or replace `maxAliveIps`
+with `(maxAliveIps − spawnedIps)` to disqualify pure SPLIT chains. For
+now the simpler form ships.
+
+The `Grid-spam` row is the case the eligibility gate previously dealt
+with via a density check. With `visitedCells` as the eligibility
+metric, the IP only visits 10 cells regardless of the surrounding
+grid, so `core = 0` and the multiplicative diversity factor takes
+zero to zero. No density gate needed.
 
 ## 8. Supply implications
 
@@ -210,38 +278,59 @@ A more Gold-skewed distribution (`90 / 9 / 1`) raises the average to
 
 ## 9. Implementation plan (next sessions)
 
-The three changes that need to land together — guest measurement, the new
-journal, and the new minter contract — all touch the proof binding, so they
-ship as one coherent migration. Once it's broadcast, the deployer revokes
-`MINTER_ROLE` from the Phase 1.5 minter and grants it to the V2 minter.
-`Windy.sol` is untouched.
+Phase 2 ships in three sessions:
 
-1. **`circuit/core`** — extend `WindyInput` (no behavior change) and
-   replace `WindyJournalSol` with the v2 layout from §3. Update the
-   ABI round-trip tests; the new journal is 416 bytes instead of 192.
+  - **Session A (done)** — bring the journal up to v2 and instrument
+    the interpreter. windy-lang gets a `metrics` feature in v2.2.0 and
+    a `visited_cells` counter in v2.2.1; circuit/core / circuit/guest
+    / circuit/host carry the new 14-field journal end-to-end and run
+    the seven sample programs at the score levels in §7.
 
-2. **`circuit/guest`** — instrument the windy `Vm`. The cleanest path is a
-   light fork of `windy-lang` (or a vendored copy under
-   `circuit/guest/vendor/windy/`) that adds the seven counters as `Vm`
-   fields and increments them at the existing opcode-dispatch sites. The
-   guest's `main()` then reads them out alongside `vm.steps` and feeds
-   the v2 `WindyJournalSol`.
+  - **Session B** — write `ZkExecutionMinterV2.sol` and its Foundry
+    tests (see below). No on-chain action.
 
-3. **`contracts/src/ZkExecutionMinterV2.sol`** — same `Pausable` +
-   `AccessControl` shape as the V1, plus:
-   - the eligibility gate from §4 (including the new
-     `consumedProgram[programHash]` mapping — first-claim-wins),
-   - the score formula from §5 (all integer arithmetic; the `0.3` /
-     `0.2` / `1.5` scalars become `× 3 / 10`, `× 2 / 10`, `× 3 / 2` to
-     stay in `uint256`),
-   - `log2_floor` via OZ `Math.log2`,
-   - tier dispatch from §6 with `REWARD_BRONZE / SILVER / GOLD`
-     immutables; sub-Bronze reverts so neither `consumedNonce` nor
-     `consumedProgram` is written,
-   - `consumedNonce` carried over from V1 without change,
-   - `consumedProgram` is new — same shape (`mapping(bytes32 => bool)`),
-     read in the gate, written immediately before the external
-     `WNDY.mint(...)` call.
+  - **Session C** — deploy V2 to Base Sepolia, source-verify on
+    Basescan, transfer `MINTER_ROLE` from the Phase 1.5 minter to V2,
+    pause V1.
+
+`Windy.sol` is untouched in all three.
+
+### Session B contract checklist
+
+`contracts/src/ZkExecutionMinterV2.sol` — same `Pausable` +
+`AccessControl` shape as V1, plus:
+
+  - the eligibility gate from §4 (including the new
+    `consumedProgram[programHash]` mapping — first-claim-wins, plus
+    the `10 ≤ visitedCells ≤ 1500` cut),
+  - the multiplicative score formula from §5. All scalars are integer
+    arithmetic in `uint256`: `0.3 → ×3 / 10`, `0.2 → ×2 / 10`,
+    `1.5 → ×3 / 2`, `1 + diversity × 0.05 → 100 + diversity × 5`
+    (apply by computing `core × (100 + diversityWeighted × 5) / 100`),
+  - `log2_floor` via OZ `Math.log2(x, Math.Rounding.Floor)`,
+  - tier dispatch from §6 with `REWARD_BRONZE / SILVER / GOLD`
+    immutables; sub-Bronze reverts so neither `consumedNonce` nor
+    `consumedProgram` is written,
+  - `consumedNonce` carried over from V1 without change,
+  - `consumedProgram` is new (`mapping(bytes32 => bool)`), read in
+    the gate, written immediately before the external `WNDY.mint(...)`
+    call,
+  - `Minted` event extended to include the score and tier so off-chain
+    indexers can compute the supply curve without re-running the
+    formula.
+
+`contracts/test/ZkExecutionMinterV2.t.sol` covers, at minimum:
+  - each tier-boundary case (score 4 → None, 5 → Bronze, 24 → Bronze,
+    25 → Silver, 49 → Silver, 50 → Gold) using `mockProve` to
+    fabricate a journal at the requested score,
+  - replay (same nonce) and dup-program (same programHash, fresh
+    nonce) both revert,
+  - `visitedCells = 9` and `visitedCells = 1501` both revert at the
+    eligibility gate before scoring,
+  - the `spawnedIps / visitedCells > 0.5` t-spam guard nukes only the
+    spawned bonus, leaving `maxAliveIps`'s contribution intact,
+  - missing `MINTER_ROLE` reverts the way V1 does, and reward-over-cap
+    reverts via `Windy.MaxSupplyExceeded` the same way.
 
 4. **`contracts/test/ZkExecutionMinterV2.t.sol`** — at minimum: each tier
    boundary, each eligibility-gate failure path, the `t`-spam guard,

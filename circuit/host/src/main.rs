@@ -82,6 +82,33 @@ fn exit_label(code: i32) -> &'static str {
     }
 }
 
+/// Pretty-print the `hardOpcodeBitmap` field as a comma-separated list
+/// of glyph names. Bit assignments mirror `WindyJournalSol`'s docstring.
+fn format_hard_opcodes(bitmap: u16) -> String {
+    const NAMES: [(u16, &str); 10] = [
+        (1 << 0, "t"),
+        (1 << 1, "p"),
+        (1 << 2, "g"),
+        (1 << 3, "_"),
+        (1 << 4, "|"),
+        (1 << 5, "≫"),
+        (1 << 6, "≪"),
+        (1 << 7, "~"),
+        (1 << 8, "#"),
+        (1 << 9, "\""),
+    ];
+    let used: Vec<&str> = NAMES
+        .iter()
+        .filter(|(bit, _)| bitmap & bit != 0)
+        .map(|(_, name)| *name)
+        .collect();
+    if used.is_empty() {
+        "—".to_string()
+    } else {
+        used.join(" ")
+    }
+}
+
 fn image_id_bytes() -> [u8; 32] {
     Digest::from(WINDY_GUEST_ID).into()
 }
@@ -139,17 +166,30 @@ fn main() {
         .expect("guest journal must abi-decode as WindyJournalSol");
 
     println!("guest journal:");
-    println!("  recipient:    0x{}", hex::encode(journal.recipient));
-    println!("  nonce:        0x{}", hex::encode(journal.nonce));
-    println!("  program_hash: 0x{}", hex::encode(journal.programHash));
-    println!("  output_hash:  0x{}", hex::encode(journal.outputHash));
+    println!("  recipient:          0x{}", hex::encode(journal.recipient));
+    println!("  nonce:              0x{}", hex::encode(journal.nonce));
+    println!("  program_hash:       0x{}", hex::encode(journal.programHash));
+    println!("  output_hash:        0x{}", hex::encode(journal.outputHash));
     println!(
-        "  exit_code:    {} ({})",
+        "  exit_code:          {} ({})",
         journal.exitCode,
         exit_label(journal.exitCode)
     );
-    println!("  steps:        {}", journal.steps);
-    println!("  raw bytes:    {} (abi-encoded)", receipt.journal.bytes.len());
+    println!("  steps:              {}", journal.steps);
+    println!("  ─ Phase 2 metrics ─");
+    println!(
+        "  hard_opcode_bitmap: 0x{:04x}  ({})",
+        journal.hardOpcodeBitmap,
+        format_hard_opcodes(journal.hardOpcodeBitmap)
+    );
+    println!("  max_alive_ips:      {}", journal.maxAliveIps);
+    println!("  spawned_ips:        {}", journal.spawnedIps);
+    println!("  grid_writes:        {}", journal.gridWrites);
+    println!("  branch_count:       {}", journal.branchCount);
+    println!("  visited_cells:      {}  (trace-truth code size)", journal.visitedCells);
+    println!("  effective_cells:    {}  (static parse, includes punctuation in comments)", journal.effectiveCells);
+    println!("  total_grid_cells:   {}", journal.totalGridCells);
+    println!("  raw bytes:          {} (abi-encoded)", receipt.journal.bytes.len());
 
     receipt
         .verify(WINDY_GUEST_ID)

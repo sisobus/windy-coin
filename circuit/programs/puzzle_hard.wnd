@@ -1,0 +1,70 @@
+→1.2.3t4.5t6.7←@
+
+  sisobus
+  ----------------------------------------------------------------------
+  Asymmetric multi-IP puzzle with TWO `t` SPLITs and FOUR live IPs
+  that pairwise collide.
+
+  Layout: 5 cells west of the first `t` (cols 1-5: 1,.,2,.,3) and
+  8 cells east of it (cols 7-9: 4,.,5; col 10 is t₂; cols 11-13:
+  6,.,7; col 14: ←). Asymmetric — east is longer than west — yet
+  the program halts cleanly via a chain of head-on collisions.
+
+  Output: 1 2 4 3 2 6 5 1 7 4
+
+  Cells
+  -----
+    col:  0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
+    char: → 1 . 2 . 3 t 4 . 5 t  6  .  7  ←  @
+
+  IP zoo
+  ------
+  P  — original parent, starts (0,0) east.
+  C₁ — spawned at t₁ (col 6) when P passes east, goes west.
+  C₂ — spawned at t₂ (col 10) when P passes east, goes west.
+  C₃ — spawned at t₁ (col 6) when C₂ passes west, goes east.
+
+  Tick-by-tick (only the eventful ticks are shown)
+  ------------------------------------------------
+
+   t  P                       C₁                     C₂                C₃          output
+   -- ----------------------  ---------------------  ----------------- -----       ------
+    3 (2) print 1                                                                   1
+    5 (4) print 2                                                                   2
+    7 (6) t₁ SPLIT — C₁ at (5) west, empty
+    9 (8) print 4 → P[3]      (4) print 3 → C₁[]                                    4 3
+   11 (10) t₂ SPLIT — C₂ at (9) west, empty   (2) print 2 → C₁[]                   2
+   13 (12) print 6 → P[3,5]                          (8) print 5 → C₂[]            6 5
+   15 (14) ← west             (2) print 1 → C₁[1]   (6) t₁ SPLIT — C₃ at (7) east  1
+   16 P at (12) west          C₁ at (4) east        C₂ at (4) west    C₃ at (8) east
+              ──── COLLISION at (4,0): C₁(east) + C₂(west) = (0,0) → both die ────
+   17 (11) push 6, → (10)                                              (8) print 4 → C₃[]   7 4
+   18 P at (10) west                                                   C₃ at (10) east
+              ──── COLLISION at (10,0): P(west) + C₃(east) = (0,0) → both die ────
+
+  After T18: zero live IPs → program halts. Exit 0.
+
+  Things to notice
+  ----------------
+  - Both `t` cells fire EXACTLY ONCE each. The IPs collide
+    *just before* re-executing them, so no cascade.
+  - The first collision happens at col 4 (where C₁ and C₂ meet)
+    and the second at col 10 (where P and C₃ meet — at t₂'s
+    own location). Different cells, different ticks, but both
+    yield direction sum (0,0) → die.
+  - Asymmetric layout works because the SPACING between t₁,
+    t₂, and ← is engineered so the timing equation works out.
+    Specifically: t₂ - t₁ = ← - t₂ = 4 cells, which makes the
+    later collisions land cleanly. Random asymmetric layouts
+    cascade infinitely.
+  - This is impossible in Befunge (no `t` SPLIT) and the
+    timing is far harder to mentally simulate than a symmetric
+    1-`t` puzzle.
+
+  Compared to the easier `puzzle.wnd`
+  -----------------------------------
+  - puzzle.wnd: 1 t, 2 IPs, symmetric layout, 10 prints.
+  - puzzle_hard.wnd: 2 t, 4 IPs, ASYMMETRIC layout, 10 prints.
+
+  Same output length but the trace requires juggling four
+  simultaneous IPs with distinct stacks instead of two.
