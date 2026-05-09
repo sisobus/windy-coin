@@ -286,8 +286,10 @@ Phase 2 ships in three sessions:
     / circuit/host carry the new 14-field journal end-to-end and run
     the seven sample programs at the score levels in §7.
 
-  - **Session B** — write `ZkExecutionMinterV2.sol` and its Foundry
-    tests (see below). No on-chain action.
+  - **Session B (done)** — `ZkExecutionMinterV2.sol` + 25 Foundry
+    tests live in `contracts/`. 100% line/branch/function coverage on
+    the V2 contract; combined Foundry suite is 51 tests passing
+    (15 Windy + 11 V1 + 25 V2). Slither finds zero issues.
 
   - **Session C** — deploy V2 to Base Sepolia, source-verify on
     Basescan, transfer `MINTER_ROLE` from the Phase 1.5 minter to V2,

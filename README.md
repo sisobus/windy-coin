@@ -27,12 +27,16 @@ Proof-of-Windy: ZK-verified windy-lang execution mining for the **WNDY** token o
 
 ```
 contracts/         Foundry project
-  src/Windy.sol               ERC-20 + Burnable + AccessControl, hard cap enforced
-  src/ZkExecutionMinter.sol   Phase 1 free-mint minter: verify + abi.decode + nonce dedup
-  test/Windy.t.sol            Cap, role gating, burn, grant/revoke, renounce
-  test/ZkExecutionMinter.t.sol Mock-verifier-backed proof flow + replay/tamper rejection
-  script/Deploy.s.sol         Base Sepolia / Base mainnet deploy + MINTER_ROLE grant
-  lib/                        OpenZeppelin v5.4.0, forge-std, risc0-ethereum v3.0.1
+  src/Windy.sol                  ERC-20 + Burnable + AccessControl, hard cap enforced
+  src/ZkExecutionMinter.sol      Phase 1 free-mint minter (live on Sepolia, will be paused at Session C)
+  src/ZkExecutionMinterV2.sol    Phase 2 tier-based minter: visited_cells gate + multiplicative
+                                 diversity score + Bronze/Silver/Gold dispatch + program-hash dedup
+  test/Windy.t.sol               Cap, role gating, burn, grant/revoke, renounce (15 tests)
+  test/ZkExecutionMinter.t.sol   V1: mock-verifier proof flow + replay/tamper rejection (11 tests)
+  test/ZkExecutionMinterV2.t.sol V2: tier boundaries, t-spam guard, program-hash dedup, visited
+                                 cell limits, pausable, role/cap regression (25 tests)
+  script/Deploy.s.sol            Base Sepolia / Base mainnet deploy + MINTER_ROLE grant
+  lib/                           OpenZeppelin v5.4.0, forge-std, risc0-ethereum v3.0.1
 
 circuit/           Risc Zero zkVM workspace
   core/            shared no_std crate:
