@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use alloy_sol_types::SolValue;
 use clap::Parser;
 use methods::{WINDY_GUEST_ELF, WINDY_GUEST_ID};
-use risc0_zkvm::{default_prover, sha::Digest, ExecutorEnv};
+use risc0_zkvm::{default_prover, sha::Digest, ExecutorEnv, ProverOpts};
 use windy_circuit_core::{WindyInput, WindyJournalSol};
 
 const DEFAULT_PROGRAM: &str = include_str!("../../programs/hello.wnd");
@@ -159,7 +159,12 @@ fn main() {
         .unwrap();
 
     let prover = default_prover();
-    let prove_info = prover.prove(env, WINDY_GUEST_ELF).unwrap();
+    // Request a Groth16 receipt directly. With the local prover this
+    // requires Docker (the STARK→Groth16 wrap runs in a container);
+    // with Bonsai it's the same opts knob the cloud honors.
+    let prove_info = prover
+        .prove_with_opts(env, WINDY_GUEST_ELF, &ProverOpts::groth16())
+        .unwrap();
     let receipt = prove_info.receipt;
 
     let journal = WindyJournalSol::abi_decode_validate(&receipt.journal.bytes)
@@ -199,9 +204,21 @@ fn main() {
     println!();
     match receipt.inner.groth16() {
         Ok(groth16) => {
+            // The on-chain RiscZeroVerifierRouter dispatches by the
+            // first 4 bytes of `seal`, which must equal the first 4
+            // bytes of `verifier_parameters` — the same prefix
+            // risc0-ethereum-contracts' `encode_seal()` helper adds.
+            // Doing it manually here so the printed `seal:` line is
+            // ready to paste straight into `cast send`.
+            let selector = &groth16.verifier_parameters.as_bytes()[..4];
+            let mut full_seal = Vec::with_capacity(selector.len() + groth16.seal.len());
+            full_seal.extend_from_slice(selector);
+            full_seal.extend_from_slice(&groth16.seal);
+
             println!("on-chain payload (paste into `cast send`):");
             println!("  image_id: 0x{}", hex::encode(image_id_bytes()));
-            println!("  seal:     0x{}", hex::encode(&groth16.seal));
+            println!("  selector: 0x{}", hex::encode(selector));
+            println!("  seal:     0x{}", hex::encode(&full_seal));
             println!("  journal:  0x{}", hex::encode(&receipt.journal.bytes));
         }
         Err(_) => {

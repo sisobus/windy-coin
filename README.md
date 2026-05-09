@@ -2,17 +2,18 @@
 
 Proof-of-Windy: ZK-verified windy-lang execution mining for the **WNDY** token on Base.
 
-> **Status (Phase 2):** ERC-20 contract + tests, a Risc Zero zkVM circuit running
-> the [windy-lang](https://crates.io/crates/windy-lang) v2.2.1 interpreter (with the
-> `metrics` feature for trace-truth code-size measurement), and the **tier-based
-> `ZkExecutionMinterV2`** (Bronze 0.1 / Silver 1 / Gold 10 WNDY) live on Base Sepolia.
-> The Phase 1 free-mint minter has had its `MINTER_ROLE` revoked and been paused — V2
-> is the only path to a fresh WNDY. Audit baseline: 51 Foundry tests, 100% coverage on
-> production contracts, Slither 0 findings. The first mint is blocked on Risc Zero's
-> cloud prover (`bonsai.xyz` is down, Boundless successor still rolling out) — once a
-> Groth16 prover is reachable, anyone can submit `mint(seal, journal)` via cast. See
-> [`docs/PHASE-2-MINING.md`](./docs/PHASE-2-MINING.md) for the policy and
-> [`CLAUDE.md`](./CLAUDE.md) for the broader project context.
+> **Status (Phase 2 — first mint live):** ERC-20 contract + tests, a Risc Zero zkVM
+> circuit running the [windy-lang](https://crates.io/crates/windy-lang) v2.2.1
+> interpreter (with the `metrics` feature for trace-truth code-size measurement), and
+> the **tier-based `ZkExecutionMinterV2`** (Bronze 0.1 / Silver 1 / Gold 10 WNDY) live
+> on Base Sepolia. The first mint
+> ([tx](https://sepolia.basescan.org/tx/0xe4d6425907f22e32571690a542f879c4ef4608d00cee14b56eaac0fe9a0034d2))
+> minted **1.0 WNDY at the Silver tier** to the deployer for a Risc Zero proof of
+> `puzzle_hard.wnd` (4 IPs, 3 SPLITs, 18 ticks, score 34.30). The Phase 1 free-mint
+> minter has had its `MINTER_ROLE` revoked and been paused — V2 is the only path to
+> fresh WNDY. Audit baseline: 51 Foundry tests, 100% coverage on production contracts,
+> Slither 0 findings. See [`docs/PHASE-2-MINING.md`](./docs/PHASE-2-MINING.md) for the
+> policy and [`CLAUDE.md`](./CLAUDE.md) for the broader project context.
 
 ## Token spec (immutable)
 
@@ -123,21 +124,40 @@ All three are source-verified on Basescan.
 | Contract                     | Address                                                                                                                                  |
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `Windy` (WNDY)               | [`0x17436284Cdc6b86F9281BBdc77161453ef1C9728`](https://sepolia.basescan.org/address/0x17436284cdc6b86f9281bbdc77161453ef1c9728#code)      |
-| `ZkExecutionMinterV2` (live) | [`0x03bd354738f5776c5c00a30024192c61c3f53c97`](https://sepolia.basescan.org/address/0x03bd354738f5776c5c00a30024192c61c3f53c97#code)      |
+| `ZkExecutionMinterV2` (live) | [`0x5e24Ff21894e54BC315AD17ffa29be3844ff3dC3`](https://sepolia.basescan.org/address/0x5e24ff21894e54bc315ad17ffa29be3844ff3dc3#code)      |
 | `IRiscZeroVerifier`          | [`0x0b144e07a0826182b6b59788c34b32bfa86fb711`](https://sepolia.basescan.org/address/0x0b144e07a0826182b6b59788c34b32bfa86fb711) (router) |
 | Deployer / admin             | `0xa37558777391cbdC2866D358298782394C4204af` (DEFAULT_ADMIN_ROLE + PAUSER_ROLE on V2; DEFAULT_ADMIN_ROLE on the token)                  |
-| Phase 2 `IMAGE_ID`           | `0x423061701325ba7b8f747876b75e4423200b4afba528ac9ff6514760e933b2d4`                                                                     |
+| Phase 2 `IMAGE_ID`           | `0xb78810f2e9557907cf9865797240661414e8102326cfdd8d8bc7879d58ca57cb`                                                                     |
 | Bronze / Silver / Gold       | `0.1` / `1` / `10` WNDY (`1e17` / `1e18` / `1e19` base units; Gold is the per-proof cap)                                                 |
 | Hard cap                     | 21,000,000 WNDY (immutable)                                                                                                              |
-| Pre-mine                     | 0 (unchanged from initial deployment)                                                                                                    |
+| Total supply                 | **1.0 WNDY** (one Silver mint to the deployer, see "First mint" below)                                                                  |
 
-`MINTER_ROLE` on the Windy token is held only by `ZkExecutionMinterV2`. The earlier
-`ZkExecutionMinter` (Phase 1.5 free-mint, deployed at
-[`0x2b24554765B4aC8cC9030b78fdDf33fDD321853e`](https://sepolia.basescan.org/address/0x2b24554765b4ac8cc9030b78fddf33fdd321853e#code))
-has had its role revoked and is paused; it is preserved on chain for reference but
-cannot mint. An even earlier 1.4c demo at
-[`0xc3B9329c...19C7`](https://sepolia.basescan.org/address/0xc3b9329cc1842780edacb7dea693ac63fa4a19c7#code)
-is similarly retired.
+`MINTER_ROLE` on the Windy token is held only by the live `ZkExecutionMinterV2` above.
+Earlier minter contracts have all had `MINTER_ROLE` revoked and been paused; they are
+preserved on chain for the audit trail but cannot mint:
+
+- [`0x03bd354738f5776c5c00a30024192c61c3f53c97`](https://sepolia.basescan.org/address/0x03bd354738f5776c5c00a30024192c61c3f53c97#code)
+  — earlier V2 with the Cargo.lock-pinned `IMAGE_ID 0x423061…2d4`, retired during the
+  V2 redeploy that wired the on-chain selector prefix into the host's printed seal.
+- [`0x2b24554765B4aC8cC9030b78fdDf33fDD321853e`](https://sepolia.basescan.org/address/0x2b24554765b4ac8cc9030b78fddf33fdd321853e#code)
+  — Phase 1.5 free-mint contract.
+- [`0xc3B9329cc1842780eDacb7dEa693Ac63fA4A19C7`](https://sepolia.basescan.org/address/0xc3b9329cc1842780edacb7dea693ac63fa4a19c7#code)
+  — original Phase 1.4c demo.
+
+### First mint (Silver tier — `puzzle_hard.wnd`)
+
+| Field                    | Value                                                                                                                       |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| Tx                       | [`0xe4d6425907f22e32571690a542f879c4ef4608d00cee14b56eaac0fe9a0034d2`](https://sepolia.basescan.org/tx/0xe4d6425907f22e32571690a542f879c4ef4608d00cee14b56eaac0fe9a0034d2) |
+| Recipient                | `0xa37558777391cbdC2866D358298782394C4204af`                                                                                |
+| Source program           | `circuit/programs/puzzle_hard.wnd` (4 IPs, 3 SPLITs, 18 ticks)                                                              |
+| `program_hash`           | `0x9b1031224069c0d2e5398ffa4ddca016a07979a30f1201f44078fc288939a31c`                                                        |
+| `output_hash`            | `0xa3a2a5f918f186fbf86c27f190a7b1fc83fb7c3ac0efbc82d4239c82d06c54ef` (`sha256("1 2 4 3 2 6 5 1 7 4 ")`)                     |
+| `visited_cells`          | 15                                                                                                                          |
+| Score                    | **34.30** (= `34_300 / 1000`)                                                                                               |
+| Tier / reward            | **Silver** / `1.0 WNDY`                                                                                                     |
+| Selector                 | `0x73c457ba` (Risc Zero Groth16 v3.0.0)                                                                                     |
+| Gas                      | 376,377                                                                                                                     |
 
 `MINTER_ROLE` on `Windy` is held only by `ZkExecutionMinter`. `DEFAULT_ADMIN_ROLE` is held by the deployer and can grant `MINTER_ROLE` to additional minters as Phase 2 mining policies come online.
 
@@ -186,21 +206,17 @@ The script deploys `Windy`, deploys `ZkExecutionMinter` against the verifier+ima
 
 ### 3. Generate a Groth16 proof and mint
 
-> ⚠️ **Currently blocked on Risc Zero's prover infrastructure.** `bonsai.xyz`
-> stopped resolving and the [Boundless](https://docs.beboundless.xyz) successor
-> service is still rolling out as of the last attempt. The contracts are
-> deployed and waiting; once a Groth16 prover (Bonsai, Boundless, or a local
-> wrap) becomes available, the steps below pick up unchanged.
-
-The local prover produces STARK receipts that are too large to verify on chain. For an on-chain mint, run the host through a hosted prover (Bonsai / Boundless) so it returns a Groth16 receipt:
+> The local risc0 prover wraps STARKs into Groth16 receipts via the
+> `risczero/risc0-groth16-prover` Docker image (multi-arch — runs on
+> Apple Silicon natively). Bonsai is not required for the testnet.
+> The host's `prove_with_opts(env, ELF, &ProverOpts::groth16())` call
+> shells out to that container; ensure Docker Desktop is running.
 
 ```bash
-export BONSAI_API_URL=<hosted prover endpoint>
-export BONSAI_API_KEY=<your key>
-
 cd circuit
 cargo run --release -p host -- \
-  --recipient 0x<your address>
+  --recipient 0x<your address> \
+  --program-file programs/puzzle_hard.wnd
 ```
 
 The host now prints an additional block at the end:
