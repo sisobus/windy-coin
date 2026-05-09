@@ -65,7 +65,7 @@ windy-coin/
 - [ ] 첫 채굴 성공 (testnet) — Phase 1.4c **컨트랙트 배포는 완료** (Base Sepolia: WNDY `0x1cc8bd48...92f4`, Minter `0xc3B9329c...19C7`, MINTER_ROLE 부여 + 검증 통과). 첫 mint는 Risc Zero cloud prover (Bonsai/Boundless) 인프라 마이그레이션 끝나면 재개. 배포자/admin: `0xa3755877...04af`.
 - [ ] 외부 감사
 - [ ] Base mainnet 배포
-- [ ] Phase 2 mining 정책 구현 — design spec은 [`docs/PHASE-2-MINING.md`](./docs/PHASE-2-MINING.md). free-mint → tier-based (None / Bronze 0.1 / Silver 1 / Gold 10 WNDY) 마이그레이션. Session A (journal v2 + windy-lang v2.2.1 + visited_cells)와 Session B (`ZkExecutionMinterV2.sol` + 25 Foundry tests, 100% coverage, Slither clean) 완료. 남은 건 Session C — Sepolia 배포 + V1 pause + MINTER_ROLE migration.
+- [x] Phase 2 mining 정책 구현 — design spec은 [`docs/PHASE-2-MINING.md`](./docs/PHASE-2-MINING.md). free-mint → tier-based (None / Bronze 0.1 / Silver 1 / Gold 10 WNDY) 마이그레이션 완료. V2 minter Sepolia 배포 (`0x03bd354738f5776c5c00a30024192c61c3f53c97`, source-verified), V1 minter `MINTER_ROLE` 회수 + `pause()` 처리. Session A (windy-lang v2.2.1 + visited_cells journal v2), Session B (`ZkExecutionMinterV2.sol` + 25 tests, 100% coverage, Slither 0), Session C (Sepolia 배포 + V1 retirement) 다 완료.
 - [ ] (Phase 3) Sonification NFT minter — windy-aria 결합
 
 ## 빌드 및 실행
