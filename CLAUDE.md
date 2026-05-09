@@ -74,6 +74,7 @@ TBD — Foundry 셋업 후 채움.
 - Admin이 임의로 토큰을 mint/burn 할 수 없는 구조.
 - 가능한 시점에 admin role을 `renounceRole`로 영구 폐기.
 - ZK verifier는 Risc Zero 공식 verifier 컨트랙트만 사용 (자작 X).
+- Phase 1.5 audit baseline: `forge coverage` 100% (라인/브랜치/함수), Slither 0 findings (`naming-convention`은 immutable UPPER_SNAKE_CASE 관용 때문에 detector 단위로 비활성화 — `slither.config.json` 참고). `ZkExecutionMinter`에 `Pausable` + `PAUSER_ROLE` 적용 (mint 비상 동결 가능, `Windy` 자체는 unchanged).
 
 ## 참고
 - 부모 오케스트레이션 repo: [sisobus-workspace](https://github.com/sisobus/sisobus-workspace)

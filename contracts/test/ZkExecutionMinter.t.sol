@@ -147,4 +147,49 @@ contract ZkExecutionMinterTest is Test {
         );
         bigMinter.mint(seal, journal);
     }
+
+    function test_Pause_BlocksMint() public {
+        bytes memory journal = _buildJournal(bytes32(uint256(7)));
+        bytes memory seal = _mockProve(journal);
+
+        minter.pause();
+        assertTrue(minter.paused());
+
+        // OZ Pausable reverts with `EnforcedPause()`.
+        vm.expectRevert();
+        minter.mint(seal, journal);
+
+        // Same nonce was never consumed — recipient balance still 0.
+        assertFalse(minter.consumedNonce(bytes32(uint256(7))));
+        assertEq(wndy.balanceOf(recipient), 0);
+    }
+
+    function test_Unpause_RestoresMint() public {
+        minter.pause();
+        minter.unpause();
+        assertFalse(minter.paused());
+
+        bytes memory journal = _buildJournal(bytes32(uint256(8)));
+        minter.mint(_mockProve(journal), journal);
+        assertEq(wndy.balanceOf(recipient), REWARD);
+    }
+
+    function test_NonPauser_CannotPause() public {
+        address stranger = address(0xBEEF);
+        vm.prank(stranger);
+        // OZ AccessControl reverts with `AccessControlUnauthorizedAccount(...)`.
+        vm.expectRevert();
+        minter.pause();
+
+        assertFalse(minter.paused());
+    }
+
+    function test_AdminCanGrantPauserRole() public {
+        address operator = address(0xCAFE);
+        minter.grantRole(minter.PAUSER_ROLE(), operator);
+
+        vm.prank(operator);
+        minter.pause();
+        assertTrue(minter.paused());
+    }
 }
