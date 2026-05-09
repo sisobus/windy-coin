@@ -8,13 +8,19 @@
 
 ## 1. Goal
 
-Two requirements drive the policy:
+Three requirements drive the policy:
 
 1. **Encourage lots of working windy code.** A successful proof of any
    sufficiently meaningful windy execution should mint WNDY.
 2. **Reward harder code more.** A program that exercises the language's
    hard-to-simulate features (multi-IP, self-modification, branching, speed
    changes) should mint more than a program that only walks a straight line.
+3. **Encourage *new* programs, not the reuse of one good program.** Each
+   distinct windy source mints at most once across the entire chain
+   lifetime. The first miner to submit a given `program_hash` claims the
+   reward; subsequent submissions of the byte-identical source revert.
+   This turns mining into a search for previously-unsolved programs, not
+   a loop that re-submits a known-good proof forever.
 
 The reference `random.ts` generator (a TypeScript program that synthesizes
 self-avoiding linear windy paths from a "safe" opcode pool) deliberately
@@ -88,21 +94,31 @@ struct WindyJournalSol {
 
 ## 4. Eligibility gate
 
-Before computing a score, the contract enforces two **hard cuts**. A journal
-that fails either is worth zero — no Bronze, no consolation.
+Before computing a score, the contract enforces three **hard cuts**. A
+journal that fails any of them reverts the transaction — no Bronze, no
+consolation, no state change.
 
 ```
+require !consumedProgram[programHash]                  // first-claim only
+require !consumedNonce[nonce]                          // standard replay protection
 require 10 ≤ effectiveCells ≤ 300
 require effectiveCells × 100 ≥ totalGridCells × 20    // density ≥ 0.20
 ```
 
-The first cut excludes both noise (< 10 effective cells, e.g. `@`) and
-oversized programs (> 300 cells, which we won't reward at all in Phase 2 —
-they're a different design space).
+The `consumedProgram` cut implements goal 3 directly: a `program_hash` is
+consumed exactly once, by whoever wins the race to land its first
+successful `mint(...)`. Two miners independently arriving at the same
+windy source race to the chain — exactly one mint, even though they each
+generated a valid proof. (A losing miner pays gas but no token; the
+losing transaction reverts before any state writes.)
 
-The second cut prevents "huge grid + sprinkled hard opcodes" spam: a 100×100
-grid that holds only 10 meaningful cells has density 0.001 and fails the gate
-even though every other metric is fine.
+The `effectiveCells` cut excludes both noise (< 10 effective cells, e.g.
+`@`) and oversized programs (> 300 cells, which we won't reward at all
+in Phase 2 — they're a different design space).
+
+The density cut prevents "huge grid + sprinkled hard opcodes" spam: a
+100×100 grid that holds only 10 meaningful cells has density 0.001 and
+fails the gate even though every other metric is fine.
 
 ## 5. Score formula
 
@@ -141,12 +157,18 @@ point we're glad to mint Gold for it.
 
 ## 6. Tier dispatch
 
-| Score          | Tier      | Reward                                       |
-| -------------- | --------- | -------------------------------------------- |
-| `< 10`         | None      | `0 WNDY`                                     |
-| `[10, 30)`     | Bronze    | `0.1 WNDY` (`1e17` base units)               |
-| `[30, 70)`     | Silver    | `1 WNDY`   (`1e18` base units)               |
-| `≥ 70`         | Gold      | `10 WNDY`  (`1e19` base units, per-proof cap) |
+| Score          | Tier      | Reward                                       | On-chain effect                       |
+| -------------- | --------- | -------------------------------------------- | ------------------------------------- |
+| `< 10`         | None      | n/a                                          | `mint()` reverts ("score below floor") |
+| `[10, 30)`     | Bronze    | `0.1 WNDY` (`1e17` base units)               | mint succeeds                         |
+| `[30, 70)`     | Silver    | `1 WNDY`   (`1e18` base units)               | mint succeeds                         |
+| `≥ 70`         | Gold      | `10 WNDY`  (`1e19` base units, per-proof cap) | mint succeeds                         |
+
+Sub-Bronze scores **revert** instead of minting zero — this preserves the
+miner's `nonce` and `program_hash` for a subsequent attempt at a higher
+score (e.g., the same algorithm rewritten more densely, since `program_hash`
+changes the moment a single byte changes). The contract never writes
+`consumedProgram[programHash] = true` for a sub-Bronze submission.
 
 The 0.1 / 1 / 10 spread (10× per tier) means a single Gold mint is worth
 exactly 100 Bronze mints — a strong gradient, but the per-proof cap of 10
@@ -207,14 +229,19 @@ ship as one coherent migration. Once it's broadcast, the deployer revokes
 
 3. **`contracts/src/ZkExecutionMinterV2.sol`** — same `Pausable` +
    `AccessControl` shape as the V1, plus:
-   - the eligibility gate from §4,
+   - the eligibility gate from §4 (including the new
+     `consumedProgram[programHash]` mapping — first-claim-wins),
    - the score formula from §5 (all integer arithmetic; the `0.3` /
      `0.2` / `1.5` scalars become `× 3 / 10`, `× 2 / 10`, `× 3 / 2` to
      stay in `uint256`),
    - `log2_floor` via OZ `Math.log2`,
    - tier dispatch from §6 with `REWARD_BRONZE / SILVER / GOLD`
-     immutables,
-   - `consumedNonce` carried over from V1 without change.
+     immutables; sub-Bronze reverts so neither `consumedNonce` nor
+     `consumedProgram` is written,
+   - `consumedNonce` carried over from V1 without change,
+   - `consumedProgram` is new — same shape (`mapping(bytes32 => bool)`),
+     read in the gate, written immediately before the external
+     `WNDY.mint(...)` call.
 
 4. **`contracts/test/ZkExecutionMinterV2.t.sol`** — at minimum: each tier
    boundary, each eligibility-gate failure path, the `t`-spam guard,
@@ -239,9 +266,9 @@ ship as one coherent migration. Once it's broadcast, the deployer revokes
 - **Per-recipient rate limiting.** Anti-spam is handled by score and
   eligibility, not by capping recipients. A relayer-friendly path stays
   simple this way.
-- **Per-program-hash deduplication.** Same `program_hash` with a different
-  `nonce` mints again — by design. Two real puzzles that happen to share a
-  hash should both pay; novelty is not the metric being incentivized.
+- **(removed)** *Per-program-hash deduplication is now part of the eligibility
+  gate (§4) — see goal 3 in §1.* The earlier draft of this spec deferred
+  it; that decision is reversed.
 - **Static analysis on the source bytes.** The minter never sees the
   source. All grading is from the guest's runtime counters, which are
   bound into the proof.
@@ -262,3 +289,12 @@ ship as one coherent migration. Once it's broadcast, the deployer revokes
 - Whether the Phase 1.5 Sepolia deployment stays reachable forever or gets
   retired by a `Pausable.pause()` once Phase 2 is broadcast. Both are
   defensible; `pause()` is the explicit choice.
+- **Race condition on first-claim.** Two miners that arrive at the
+  byte-identical windy source race to land their `mint(...)` first; the
+  loser's transaction reverts and they pay gas without minting. This is
+  a feature for goal 3 ("encourage new programs") but worth noting. We
+  do *not* plan a commit-reveal scheme to mitigate this in Phase 2 —
+  the simpler "first to land wins" model is fine for an experimental
+  testnet phase, and any miner anxious about race losses can prove
+  against a pre-broadcast nonce-only commitment scheme client-side
+  before submitting.
