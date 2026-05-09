@@ -72,11 +72,22 @@ windy-coin/
 TBD — Foundry 셋업 후 채움.
 
 ## 보안 / 신뢰 원칙
-- Mainnet 배포 전 **외부 감사 필수**.
+- ~~Mainnet 배포 전 **외부 감사 필수**~~ → 2026-05-09 결정 변경: windy-coin은 실험적 / 취미 성격의 useful-PoW 토큰이고 즉각적 재정 위험 노출이 제한적. 외부 유료 감사는 비용 대비 효율이 떨어진다고 판단해 **자체 검증만으로 mainnet 진입**. 자체 baseline은 충분히 강함 (아래 항목들). 향후 실제 가치/유동성이 모이면 그 시점에 재감사.
 - Admin이 임의로 토큰을 mint/burn 할 수 없는 구조.
 - 가능한 시점에 admin role을 `renounceRole`로 영구 폐기.
 - ZK verifier는 Risc Zero 공식 verifier 컨트랙트만 사용 (자작 X).
-- Phase 1.5 audit baseline: `forge coverage` 100% (라인/브랜치/함수), Slither 0 findings (`naming-convention`은 immutable UPPER_SNAKE_CASE 관용 때문에 detector 단위로 비활성화 — `slither.config.json` 참고). `ZkExecutionMinter`에 `Pausable` + `PAUSER_ROLE` 적용 (mint 비상 동결 가능, `Windy` 자체는 unchanged).
+- 자체 audit baseline:
+  - 61 Foundry tests 통과 (15 Windy + 11 V1 + 35 V2)
+  - 7 fuzz tests × 256 runs = 1,792 randomized executions
+  - `forge coverage` 100% (라인/브랜치/함수) on production contracts
+  - Slither 0 findings (`naming-convention` + `cyclomatic-complexity` 정당하게 비활성화)
+  - `Pausable` + `PAUSER_ROLE` (mint 비상 동결 가능)
+  - `consumedNonce` + `consumedProgram` dedup
+  - 21M hard cap immutable, pre-mine 0
+  - Sepolia 첫 채굴 검증 통과 (1.0 WNDY at Silver tier)
+  - `Cargo.lock` committed (reproducible IMAGE_ID)
+  - Multisig admin migration script 준비 (`MigrateAdmin.s.sol`)
+  - Mainnet atomic deploy + 즉시 admin renounce script (`DeployMainnet.s.sol`)
 
 ## 참고
 - 부모 오케스트레이션 repo: [sisobus-workspace](https://github.com/sisobus/sisobus-workspace)

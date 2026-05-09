@@ -2,18 +2,22 @@
 
 Proof-of-Windy: ZK-verified windy-lang execution mining for the **WNDY** token on Base.
 
-> **Status (Phase 2 — first mint live):** ERC-20 contract + tests, a Risc Zero zkVM
-> circuit running the [windy-lang](https://crates.io/crates/windy-lang) v2.2.1
-> interpreter (with the `metrics` feature for trace-truth code-size measurement), and
-> the **tier-based `ZkExecutionMinterV2`** (Bronze 0.1 / Silver 1 / Gold 10 WNDY) live
-> on Base Sepolia. The first mint
-> ([tx](https://sepolia.basescan.org/tx/0xe4d6425907f22e32571690a542f879c4ef4608d00cee14b56eaac0fe9a0034d2))
-> minted **1.0 WNDY at the Silver tier** to the deployer for a Risc Zero proof of
-> `puzzle_hard.wnd` (4 IPs, 3 SPLITs, 18 ticks, score 34.30). The Phase 1 free-mint
-> minter has had its `MINTER_ROLE` revoked and been paused — V2 is the only path to
-> fresh WNDY. Audit baseline: 51 Foundry tests, 100% coverage on production contracts,
-> Slither 0 findings. See [`docs/PHASE-2-MINING.md`](./docs/PHASE-2-MINING.md) for the
-> policy and [`CLAUDE.md`](./CLAUDE.md) for the broader project context.
+> **Status (Phase 3 — mainnet-ready):** All contract code + the Phase 2 mining policy
+> is finalised; first mint is verified on Base Sepolia
+> ([tx](https://sepolia.basescan.org/tx/0xe4d6425907f22e32571690a542f879c4ef4608d00cee14b56eaac0fe9a0034d2);
+> 1.0 WNDY at Silver for `puzzle_hard.wnd`). The maintainer has decided to ship to
+> Base mainnet on the **self-audit-only baseline** (61 tests, 7 fuzz × 256 runs, 100%
+> coverage, Slither 0 findings, Pausable kill switch, multisig migration script
+> prepared) — windy-coin is an experimental / hobby useful-PoW token with limited
+> immediate financial-risk exposure, and a paid external audit (~$50k+) is judged not
+> cost-effective for that profile. The decision is logged in
+> [`CLAUDE.md`](./CLAUDE.md). Mainnet broadcast is queued behind operator setup
+> (separate mainnet deployer key, real Base ETH, optional multisig). The Phase 1
+> free-mint minter is retired on Sepolia; once mainnet ships, the same path applies
+> there. See [`docs/PHASE-2-MINING.md`](./docs/PHASE-2-MINING.md) for the policy,
+> [`docs/TOKENOMICS.md`](./docs/TOKENOMICS.md) for the supply curve, and
+> [`docs/PHASE-3-PLAN.md`](./docs/PHASE-3-PLAN.md) for the post-launch minter
+> evolution.
 
 ## Token spec (immutable)
 
