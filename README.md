@@ -107,16 +107,18 @@ receipt verified
 
 ### Live contracts
 
-| Contract              | Address                                                                                                                       |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `Windy` (WNDY)        | [`0x1cc8bd48c922d37b183CD6EA7b5d69FBf40e92f4`](https://sepolia.basescan.org/address/0x1cc8bd48c922d37b183CD6EA7b5d69FBf40e92f4) |
-| `ZkExecutionMinter`   | [`0xc3B9329cc1842780eDacb7dEa693Ac63fA4A19C7`](https://sepolia.basescan.org/address/0xc3B9329cc1842780eDacb7dEa693Ac63fA4A19C7) |
+Both contracts are source-verified on Basescan via Etherscan API V2.
+
+| Contract              | Address                                                                                                                                  |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `Windy` (WNDY)        | [`0x1cc8bd48c922d37b183CD6EA7b5d69FBf40e92f4`](https://sepolia.basescan.org/address/0x1cc8bd48c922d37b183cd6ea7b5d69fbf40e92f4#code)      |
+| `ZkExecutionMinter`   | [`0xc3B9329cc1842780eDacb7dEa693Ac63fA4A19C7`](https://sepolia.basescan.org/address/0xc3b9329cc1842780edacb7dea693ac63fa4a19c7#code)      |
 | `IRiscZeroVerifier`   | [`0x0b144e07a0826182b6b59788c34b32bfa86fb711`](https://sepolia.basescan.org/address/0x0b144e07a0826182b6b59788c34b32bfa86fb711) (router) |
-| Deployer / admin      | `0xa37558777391cbdC2866D358298782394C4204af`                                                                                  |
-| `IMAGE_ID`            | `0xe6c387f29e2a318dabe3be9b2a9fd3c567cfb907c962e462eb7231e46c876df4`                                                          |
-| `REWARD`              | 1 WNDY (`1e18` base units) per accepted proof                                                                                 |
-| Hard cap              | 21,000,000 WNDY (immutable)                                                                                                   |
-| Pre-mine              | 0 (unchanged from initial deployment)                                                                                         |
+| Deployer / admin      | `0xa37558777391cbdC2866D358298782394C4204af`                                                                                             |
+| `IMAGE_ID`            | `0xe6c387f29e2a318dabe3be9b2a9fd3c567cfb907c962e462eb7231e46c876df4`                                                                     |
+| `REWARD`              | 1 WNDY (`1e18` base units) per accepted proof                                                                                            |
+| Hard cap              | 21,000,000 WNDY (immutable)                                                                                                              |
+| Pre-mine              | 0 (unchanged from initial deployment)                                                                                                    |
 
 `MINTER_ROLE` on `Windy` is held only by `ZkExecutionMinter`. `DEFAULT_ADMIN_ROLE` is held by the deployer and can grant `MINTER_ROLE` to additional minters as Phase 2 mining policies come online.
 
