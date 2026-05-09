@@ -80,7 +80,8 @@ TBD — Foundry 셋업 후 채움.
   - 61 Foundry tests 통과 (15 Windy + 11 V1 + 35 V2)
   - 7 fuzz tests × 256 runs = 1,792 randomized executions
   - `forge coverage` 100% (라인/브랜치/함수) on production contracts
-  - Slither 0 findings (`naming-convention` + `cyclomatic-complexity` 정당하게 비활성화)
+  - **Slither** (정적 분석, 99 detectors) — 0 findings (`naming-convention` + `cyclomatic-complexity` 정당하게 비활성화)
+  - **Mythril** (ConsenSys symbolic execution) — `Windy.sol` + `ZkExecutionMinterV2.sol` 모두 `No issues were detected`
   - `Pausable` + `PAUSER_ROLE` (mint 비상 동결 가능)
   - `consumedNonce` + `consumedProgram` dedup
   - 21M hard cap immutable, pre-mine 0
