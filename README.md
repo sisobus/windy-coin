@@ -2,12 +2,14 @@
 
 Proof-of-Windy: ZK-verified windy-lang execution mining for the **WNDY** token on Base.
 
-> **Status (Phase 1.4c):** ERC-20 contract + tests, a Risc Zero zkVM circuit running
+> **Status (Phase 1.5):** ERC-20 contract + tests, a Risc Zero zkVM circuit running
 > the [windy-lang](https://crates.io/crates/windy-lang) v2.1.0 interpreter, and an on-chain
-> `ZkExecutionMinter` (free-mint policy) **deployed live on Base Sepolia** against the
-> Risc Zero verifier router. The first mint is blocked on Risc Zero's cloud prover
-> (`bonsai.xyz` is down, Boundless successor still rolling out) — once a Groth16 prover is
-> reachable, anyone can submit `mint(seal, journal)` via cast. See [`CLAUDE.md`](./CLAUDE.md).
+> `ZkExecutionMinter` (free-mint policy + pausable kill switch) **deployed live on Base
+> Sepolia** against the Risc Zero verifier router. Audit baseline: `forge coverage`
+> 100% / Slither 0 findings / 26 tests. The first mint is blocked on Risc Zero's cloud
+> prover (`bonsai.xyz` is down, Boundless successor still rolling out) — once a Groth16
+> prover is reachable, anyone can submit `mint(seal, journal)` via cast. See
+> [`CLAUDE.md`](./CLAUDE.md).
 
 ## Token spec (immutable)
 
@@ -111,14 +113,19 @@ Both contracts are source-verified on Basescan via Etherscan API V2.
 
 | Contract              | Address                                                                                                                                  |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `Windy` (WNDY)        | [`0x1cc8bd48c922d37b183CD6EA7b5d69FBf40e92f4`](https://sepolia.basescan.org/address/0x1cc8bd48c922d37b183cd6ea7b5d69fbf40e92f4#code)      |
-| `ZkExecutionMinter`   | [`0xc3B9329cc1842780eDacb7dEa693Ac63fA4A19C7`](https://sepolia.basescan.org/address/0xc3b9329cc1842780edacb7dea693ac63fa4a19c7#code)      |
+| `Windy` (WNDY)        | [`0x17436284Cdc6b86F9281BBdc77161453ef1C9728`](https://sepolia.basescan.org/address/0x17436284cdc6b86f9281bbdc77161453ef1c9728#code)      |
+| `ZkExecutionMinter`   | [`0x2b24554765B4aC8cC9030b78fdDf33fDD321853e`](https://sepolia.basescan.org/address/0x2b24554765b4ac8cc9030b78fddf33fdd321853e#code)      |
 | `IRiscZeroVerifier`   | [`0x0b144e07a0826182b6b59788c34b32bfa86fb711`](https://sepolia.basescan.org/address/0x0b144e07a0826182b6b59788c34b32bfa86fb711) (router) |
-| Deployer / admin      | `0xa37558777391cbdC2866D358298782394C4204af`                                                                                             |
+| Deployer / admin      | `0xa37558777391cbdC2866D358298782394C4204af` (holds DEFAULT_ADMIN_ROLE + PAUSER_ROLE on the minter; DEFAULT_ADMIN_ROLE on the token)     |
 | `IMAGE_ID`            | `0xe6c387f29e2a318dabe3be9b2a9fd3c567cfb907c962e462eb7231e46c876df4`                                                                     |
 | `REWARD`              | 1 WNDY (`1e18` base units) per accepted proof                                                                                            |
 | Hard cap              | 21,000,000 WNDY (immutable)                                                                                                              |
 | Pre-mine              | 0 (unchanged from initial deployment)                                                                                                    |
+
+> A Phase 1.4c version (without `Pausable`) was previously deployed at
+> [`0x1cc8bd48...92f4`](https://sepolia.basescan.org/address/0x1cc8bd48c922d37b183cd6ea7b5d69fbf40e92f4#code) /
+> [`0xc3B9329c...19C7`](https://sepolia.basescan.org/address/0xc3b9329cc1842780edacb7dea693ac63fa4a19c7#code).
+> Those are now superseded — the addresses above are the live ones.
 
 `MINTER_ROLE` on `Windy` is held only by `ZkExecutionMinter`. `DEFAULT_ADMIN_ROLE` is held by the deployer and can grant `MINTER_ROLE` to additional minters as Phase 2 mining policies come online.
 
