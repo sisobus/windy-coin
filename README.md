@@ -3,11 +3,11 @@
 Proof-of-Windy: ZK-verified windy-lang execution mining for the **WNDY** token on Base.
 
 > **Status (Phase 1.4c):** ERC-20 contract + tests, a Risc Zero zkVM circuit running
-> the [windy-lang](https://crates.io/crates/windy-lang) v2.1.0 interpreter, an on-chain
-> `ZkExecutionMinter` (free-mint policy) with Foundry tests against `RiscZeroMockVerifier`,
-> and the deployment artifacts (`script/Deploy.s.sol`, host `--print-image-id` flag,
-> Bonsai-aware on-chain payload printer). Actual Base Sepolia broadcast is user-driven —
-> the [Deployment](#deployment-base-sepolia) section is a runbook. See [`CLAUDE.md`](./CLAUDE.md).
+> the [windy-lang](https://crates.io/crates/windy-lang) v2.1.0 interpreter, and an on-chain
+> `ZkExecutionMinter` (free-mint policy) **deployed live on Base Sepolia** against the
+> Risc Zero verifier router. The first mint is blocked on Risc Zero's cloud prover
+> (`bonsai.xyz` is down, Boundless successor still rolling out) — once a Groth16 prover is
+> reachable, anyone can submit `mint(seal, journal)` via cast. See [`CLAUDE.md`](./CLAUDE.md).
 
 ## Token spec (immutable)
 
@@ -105,6 +105,23 @@ receipt verified
 
 ## Deployment (Base Sepolia)
 
+### Live contracts
+
+| Contract              | Address                                                                                                                       |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `Windy` (WNDY)        | [`0x1cc8bd48c922d37b183CD6EA7b5d69FBf40e92f4`](https://sepolia.basescan.org/address/0x1cc8bd48c922d37b183CD6EA7b5d69FBf40e92f4) |
+| `ZkExecutionMinter`   | [`0xc3B9329cc1842780eDacb7dEa693Ac63fA4A19C7`](https://sepolia.basescan.org/address/0xc3B9329cc1842780eDacb7dEa693Ac63fA4A19C7) |
+| `IRiscZeroVerifier`   | [`0x0b144e07a0826182b6b59788c34b32bfa86fb711`](https://sepolia.basescan.org/address/0x0b144e07a0826182b6b59788c34b32bfa86fb711) (router) |
+| Deployer / admin      | `0xa37558777391cbdC2866D358298782394C4204af`                                                                                  |
+| `IMAGE_ID`            | `0xe6c387f29e2a318dabe3be9b2a9fd3c567cfb907c962e462eb7231e46c876df4`                                                          |
+| `REWARD`              | 1 WNDY (`1e18` base units) per accepted proof                                                                                 |
+| Hard cap              | 21,000,000 WNDY (immutable)                                                                                                   |
+| Pre-mine              | 0 (unchanged from initial deployment)                                                                                         |
+
+`MINTER_ROLE` on `Windy` is held only by `ZkExecutionMinter`. `DEFAULT_ADMIN_ROLE` is held by the deployer and can grant `MINTER_ROLE` to additional minters as Phase 2 mining policies come online.
+
+### Re-deploying or deploying a fresh chain
+
 The contracts are intentionally chain-agnostic — `ZkExecutionMinter` takes the verifier address, image ID, and reward as constructor arguments. Pin those at deploy time.
 
 ### Risc Zero verifiers
@@ -148,11 +165,17 @@ The script deploys `Windy`, deploys `ZkExecutionMinter` against the verifier+ima
 
 ### 3. Generate a Groth16 proof and mint
 
-The local prover produces STARK receipts that are too large to verify on chain. For an on-chain mint, run the host through Bonsai (Risc Zero's hosted prover) so it returns a Groth16 receipt:
+> ⚠️ **Currently blocked on Risc Zero's prover infrastructure.** `bonsai.xyz`
+> stopped resolving and the [Boundless](https://docs.beboundless.xyz) successor
+> service is still rolling out as of the last attempt. The contracts are
+> deployed and waiting; once a Groth16 prover (Bonsai, Boundless, or a local
+> wrap) becomes available, the steps below pick up unchanged.
+
+The local prover produces STARK receipts that are too large to verify on chain. For an on-chain mint, run the host through a hosted prover (Bonsai / Boundless) so it returns a Groth16 receipt:
 
 ```bash
-export BONSAI_API_URL=https://api.bonsai.xyz
-export BONSAI_API_KEY=<your bonsai key>
+export BONSAI_API_URL=<hosted prover endpoint>
+export BONSAI_API_KEY=<your key>
 
 cd circuit
 cargo run --release -p host -- \
