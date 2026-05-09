@@ -461,4 +461,210 @@ contract ZkExecutionMinterV2Test is Test {
         );
         minter.mint(seal, journal);
     }
+
+    // -- fuzz tests -------------------------------------------------------
+    //
+    // computeScore is pure, so we fuzz it directly without any prover or
+    // chain interaction. The bound on `visitedCells` matches the contract's
+    // eligibility window so we exercise the in-bounds path; out-of-bounds
+    // values are covered by the explicit revert tests above.
+
+    /// @dev Score must never exceed a static upper bound regardless of
+    /// metric inputs. Concretely: every metric is capped, the diversity
+    /// factor is capped at 100 + 41×5 = 305, and core×10 is capped at
+    /// log2(2^64-1)×100 + 20×15 + 100×3 + 100×2 = 6300 + 300 + 300 + 200
+    /// = 7100. Score×1000 ≤ 7100 × 305 = 2_165_500. Anything beyond that
+    /// would mean a clamp regressed.
+    function testFuzz_ScoreNeverExceedsUpperBound(
+        uint16 hardOpcodeBitmap,
+        uint64 maxAliveIps,
+        uint64 spawnedIps,
+        uint64 gridWrites,
+        uint64 branchCount,
+        uint64 visitedCells
+    ) public view {
+        ZkExecutionMinterV2.WindyJournal memory j = _journalDefaults();
+        j.hardOpcodeBitmap = hardOpcodeBitmap;
+        j.maxAliveIps = maxAliveIps;
+        j.spawnedIps = spawnedIps;
+        j.gridWrites = gridWrites;
+        j.branchCount = branchCount;
+        j.visitedCells = visitedCells;
+
+        (uint256 scoreX1000,) = minter.computeScore(j);
+        assertLe(scoreX1000, 2_165_500);
+    }
+
+    /// @dev Score is monotonically non-decreasing in `gridWrites` (with
+    /// every other input held). All four `core` summands are added, not
+    /// xored, and `gridWrites` only contributes positively until its cap.
+    /// Past the cap (>100) the contribution is constant so the property
+    /// still holds with `assertGe`.
+    function testFuzz_ScoreMonotonicInGridWrites(uint64 a, uint64 b) public view {
+        vm.assume(a < b);
+        ZkExecutionMinterV2.WindyJournal memory j = _journalDefaults();
+
+        j.gridWrites = a;
+        (uint256 scoreA,) = minter.computeScore(j);
+        j.gridWrites = b;
+        (uint256 scoreB,) = minter.computeScore(j);
+
+        assertGe(scoreB, scoreA);
+    }
+
+    /// @dev Same monotonicity over `branchCount`.
+    function testFuzz_ScoreMonotonicInBranches(uint64 a, uint64 b) public view {
+        vm.assume(a < b);
+        ZkExecutionMinterV2.WindyJournal memory j = _journalDefaults();
+
+        j.branchCount = a;
+        (uint256 scoreA,) = minter.computeScore(j);
+        j.branchCount = b;
+        (uint256 scoreB,) = minter.computeScore(j);
+
+        assertGe(scoreB, scoreA);
+    }
+
+    /// @dev Diversity is multiplicative; with `core == 0` (no other
+    /// metrics) any setting of the bitmap multiplies zero by 1.0–3.05 and
+    /// must stay zero. This pins the "huge-grid spam" guarantee from the
+    /// design spec.
+    function testFuzz_DiversityOnlyAlwaysScoresZero(uint16 hardOpcodeBitmap) public view {
+        ZkExecutionMinterV2.WindyJournal memory j = _journalDefaults();
+        j.hardOpcodeBitmap = hardOpcodeBitmap;
+        j.maxAliveIps = 1; // log2 = 0
+        j.spawnedIps = 0;
+        j.gridWrites = 0;
+        j.branchCount = 0;
+        j.visitedCells = 100; // arbitrary, in-range
+
+        (uint256 scoreX1000, ZkExecutionMinterV2.Tier tier) = minter.computeScore(j);
+        assertEq(scoreX1000, 0);
+        assertEq(uint256(tier), uint256(ZkExecutionMinterV2.Tier.None));
+    }
+
+    /// @dev When 2 × spawnedIps > visitedCells, the spawned-bonus
+    /// contribution must be zero. The t-spam guard is what prevents a
+    /// long SPLIT chain from hitting Silver/Gold via spawned-count alone.
+    /// We isolate the bonus by zeroing every other input.
+    function testFuzz_TSpamGuardKillsSpawnedBonus(
+        uint64 spawnedIps,
+        uint64 visitedCells
+    ) public view {
+        spawnedIps = uint64(bound(spawnedIps, 1, 1000));
+        visitedCells = uint64(bound(visitedCells, 10, 1500));
+        vm.assume(uint256(spawnedIps) * 2 > uint256(visitedCells));
+
+        ZkExecutionMinterV2.WindyJournal memory j = _journalDefaults();
+        j.hardOpcodeBitmap = 0;
+        j.maxAliveIps = 1; // log2 = 0 → no maxAliveIps contribution
+        j.spawnedIps = spawnedIps;
+        j.gridWrites = 0;
+        j.branchCount = 0;
+        j.visitedCells = visitedCells;
+
+        (uint256 scoreX1000,) = minter.computeScore(j);
+        // With every contribution zero (spawned bonus killed by guard,
+        // log2(1)=0, no writes, no branches), the score must be zero.
+        assertEq(scoreX1000, 0);
+    }
+
+    /// @dev When 2 × spawnedIps ≤ visitedCells, the bonus survives. We
+    /// pick visitedCells just at the boundary so the inequality flips
+    /// exactly between cases.
+    function testFuzz_SpawnedBonusSurvivesUnderTSpamCutoff(uint64 spawnedIps) public view {
+        spawnedIps = uint64(bound(spawnedIps, 1, 20));
+        ZkExecutionMinterV2.WindyJournal memory j = _journalDefaults();
+        j.hardOpcodeBitmap = 0;
+        j.maxAliveIps = 1;
+        j.spawnedIps = spawnedIps;
+        j.gridWrites = 0;
+        j.branchCount = 0;
+        j.visitedCells = uint64(uint256(spawnedIps) * 2); // boundary: ratio = 0.5 exactly, NOT >0.5
+
+        (uint256 scoreX1000,) = minter.computeScore(j);
+        // Bonus = spawnedIps × 15 (since spawnedIps ≤ 20 = CAP), factor = 100.
+        assertEq(scoreX1000, uint256(spawnedIps) * 15 * 100);
+    }
+
+    /// @dev Tier-dispatch boundaries are stable: if score increases, tier
+    /// is non-decreasing. Pin a few specific scores at the cutoffs.
+    function testFuzz_TierDispatchAtBoundaries(uint256 scoreNudge) public view {
+        scoreNudge = bound(scoreNudge, 0, 99_999);
+        ZkExecutionMinterV2.WindyJournal memory j = _journalDefaults();
+
+        // Drive score by setting branches × 0.2 (×10 = ×2). Each unit of
+        // branchCount adds 200 to scoreX1000 (factor = 100). So
+        // branchCount = 50 → scoreX1000 = 10_000 (Bronze floor).
+        j.hardOpcodeBitmap = 0;
+        j.maxAliveIps = 1;
+        j.spawnedIps = 0;
+        j.gridWrites = 0;
+        j.visitedCells = 100;
+        j.branchCount = uint64(scoreNudge / 200);
+
+        (uint256 scoreX1000, ZkExecutionMinterV2.Tier tier) = minter.computeScore(j);
+        if (scoreX1000 < 10_000) assertEq(uint256(tier), uint256(ZkExecutionMinterV2.Tier.None));
+        else if (scoreX1000 < 30_000) assertEq(uint256(tier), uint256(ZkExecutionMinterV2.Tier.Bronze));
+        else if (scoreX1000 < 70_000) assertEq(uint256(tier), uint256(ZkExecutionMinterV2.Tier.Silver));
+        else assertEq(uint256(tier), uint256(ZkExecutionMinterV2.Tier.Gold));
+    }
+
+    // -- invariants -------------------------------------------------------
+
+    /// @dev Once a nonce is consumed, it stays consumed. This is a
+    /// per-mint property covered by `consumedNonce()` — we just pin that
+    /// no code path resets it.
+    function test_ConsumedNonceIsPermanent() public {
+        ZkExecutionMinterV2.WindyJournal memory j = _journalDefaults();
+        _mintWith(j);
+        assertTrue(minter.consumedNonce(j.nonce));
+
+        // Pause and unpause — neither must clear consumedNonce.
+        minter.pause();
+        minter.unpause();
+        assertTrue(minter.consumedNonce(j.nonce));
+    }
+
+    /// @dev Same, for consumedProgram.
+    function test_ConsumedProgramIsPermanent() public {
+        ZkExecutionMinterV2.WindyJournal memory j = _journalDefaults();
+        _mintWith(j);
+        assertTrue(minter.consumedProgram(j.programHash));
+
+        minter.pause();
+        minter.unpause();
+        assertTrue(minter.consumedProgram(j.programHash));
+    }
+
+    /// @dev totalSupply increments by exactly the tier reward on each
+    /// successful mint, never more. We exercise each tier by rebuilding
+    /// minimal journals with hand-tuned metrics.
+    function test_TotalSupplyMatchesTierRewards() public {
+        // Mint Silver (default journal hits Silver).
+        _mintWith(_journalDefaults());
+
+        // Mint Bronze: distinct program, score in [10, 30) — set
+        // maxAliveIps = 2 alone (log2=1, ×100 = 100 → core×10 = 100,
+        // factor 100 → score = 10_000 → Bronze).
+        ZkExecutionMinterV2.WindyJournal memory bronze = _journalDefaults();
+        bronze.programHash = bytes32(uint256(0xCAFE));
+        bronze.nonce = bytes32(uint256(2));
+        bronze.hardOpcodeBitmap = 0;
+        bronze.maxAliveIps = 2;
+        bronze.spawnedIps = 0;
+        _mintWith(bronze);
+
+        // Mint Gold: distinct program, score ≥ 70.
+        ZkExecutionMinterV2.WindyJournal memory gold = _journalDefaults();
+        gold.programHash = bytes32(uint256(0xBABE));
+        gold.nonce = bytes32(uint256(3));
+        gold.hardOpcodeBitmap = 0;
+        gold.maxAliveIps = 128; // log2 = 7
+        gold.spawnedIps = 0;
+        _mintWith(gold);
+
+        assertEq(wndy.totalSupply(), REWARD_SILVER + REWARD_BRONZE + REWARD_GOLD);
+        assertEq(wndy.balanceOf(recipient), REWARD_SILVER + REWARD_BRONZE + REWARD_GOLD);
+    }
 }

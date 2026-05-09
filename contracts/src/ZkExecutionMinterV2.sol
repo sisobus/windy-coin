@@ -107,9 +107,25 @@ contract ZkExecutionMinterV2 is AccessControl, Pausable {
     /// @notice Tracks consumed program hashes (first-claim wins).
     mapping(bytes32 => bool) public consumedProgram;
 
+    /// @notice The nonce committed in the journal has already been used by
+    ///         a previous successful mint. Replay protection.
     error NonceAlreadyConsumed(bytes32 nonce);
+
+    /// @notice The program hash committed in the journal has already
+    ///         minted once. Goal 3 of the policy ("encourage new programs")
+    ///         is enforced by first-claim-wins on `programHash`.
     error ProgramAlreadyConsumed(bytes32 programHash);
+
+    /// @notice The proof's `visitedCells` field is outside the eligibility
+    ///         window `[MIN_VISITED_CELLS, MAX_VISITED_CELLS]`. Rejects
+    ///         both trivial programs (< 10 cells executed) and overlong
+    ///         programs (> 1500 cells, reserved for Phase 3+).
     error VisitedCellsOutOfRange(uint64 visitedCells);
+
+    /// @notice The computed score is below the Bronze floor. Sub-Bronze
+    ///         submissions revert *without* writing `consumedNonce` /
+    ///         `consumedProgram`, so the miner can densify the source
+    ///         (which would change `programHash` anyway) and try again.
     error ScoreBelowFloor(uint256 scoreX1000);
 
     /// @notice Emitted on a successful mint. `scoreX1000` is exactly
@@ -218,6 +234,21 @@ contract ZkExecutionMinterV2 is AccessControl, Pausable {
 
     /// @notice Pure scoring of a journal — exposed so off-chain tooling
     ///         can pre-grade a proof before paying gas.
+    /// @dev Integer-only rendering of the float formula in
+    ///      `docs/PHASE-2-MINING.md` §5. We carry every intermediate
+    ///      result at a fixed scale:
+    ///        - `log2 × 10` becomes `log2 × 100`  (scale ×10)
+    ///        - `spawned × 1.5` becomes `spawned × 15`  (scale ×10)
+    ///        - `writes × 0.3` becomes `writes × 3`  (scale ×10)
+    ///        - `branches × 0.2` becomes `branches × 2`  (scale ×10)
+    ///      so `coreX10 = core × 10`. The diversity factor `1 + div × 0.05`
+    ///      becomes `factorX100 = 100 + div × 5` (scale ×100). Multiplying
+    ///      gives `scoreX1000 = coreX10 × factorX100 = score × 1000`.
+    ///      Tier cutoffs compare against `scoreX1000` directly.
+    ///
+    ///      Each capped sum is bounded; an analytic upper bound on
+    ///      `scoreX1000` is `7100 × 305 = 2_165_500`, which the
+    ///      `testFuzz_ScoreNeverExceedsUpperBound` test pins.
     /// @return scoreX1000  Score × 1000 (so the human value is /1000).
     /// @return tier        The reward tier the score lands in.
     function computeScore(WindyJournal memory j) public pure returns (uint256 scoreX1000, Tier tier) {
