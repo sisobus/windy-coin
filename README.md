@@ -43,7 +43,9 @@ circuit/           Risc Zero zkVM workspace
   methods/         build glue: compiles the guest into ELF + image ID constants
   host/            CLI: takes --recipient + --nonce + program, proves, abi_decodes
                    the journal, verifies the receipt
-  programs/        sample windy-lang programs (currently just `hello.wnd`)
+  programs/        sample windy-lang programs (hello, factorial, fib, hi_windy,
+                   sum_winds, hello_winds — see programs/README.md for the
+                   regression baseline of journal hashes)
 ```
 
 ## Build & test
