@@ -2,19 +2,20 @@
 
 Proof-of-Windy: ZK-verified windy-lang execution mining for the **WNDY** token on Base.
 
-> **Status (Phase 3 — mainnet-ready):** All contract code + the Phase 2 mining policy
-> is finalised; first mint is verified on Base Sepolia
+> **Status (Phase 3 — mainnet live):** WNDY is live on Base mainnet
+> ([`Windy`](https://basescan.org/address/0x8c64a92e3a12f5ca4050b5fb90804bd24cd653ca#code) at
+> `0x8c64a92e3a12f5ca4050b5fb90804bd24cd653ca`, deployed 2026-05-11) on the
+> **self-audit-only baseline** (61 tests, 7 fuzz × 256 runs, 100% coverage,
+> Slither 0, Mythril `No issues were detected`, Pausable kill switch, Safe
+> multisig admin). The deployer EOA renounced every role in the same atomic
+> broadcast as the deploy — only the Safe can pause or grant new minters, and
+> the 21M `MAX_SUPPLY` is a `constant` in the bytecode that nobody can change.
+> The decision to skip a paid external audit (~$50k+) for this experimental /
+> hobby useful-PoW token is logged in [`CLAUDE.md`](./CLAUDE.md). The Sepolia
+> first mint at Silver tier
 > ([tx](https://sepolia.basescan.org/tx/0xe4d6425907f22e32571690a542f879c4ef4608d00cee14b56eaac0fe9a0034d2);
-> 1.0 WNDY at Silver for `puzzle_hard.wnd`). The maintainer has decided to ship to
-> Base mainnet on the **self-audit-only baseline** (61 tests, 7 fuzz × 256 runs, 100%
-> coverage, Slither 0 findings, Pausable kill switch, multisig migration script
-> prepared) — windy-coin is an experimental / hobby useful-PoW token with limited
-> immediate financial-risk exposure, and a paid external audit (~$50k+) is judged not
-> cost-effective for that profile. The decision is logged in
-> [`CLAUDE.md`](./CLAUDE.md). Mainnet broadcast is queued behind operator setup
-> (separate mainnet deployer key, real Base ETH, optional multisig). The Phase 1
-> free-mint minter is retired on Sepolia; once mainnet ships, the same path applies
-> there. See [`docs/PHASE-2-MINING.md`](./docs/PHASE-2-MINING.md) for the policy,
+> 1.0 WNDY for `puzzle_hard.wnd`) is preserved as testnet history. See
+> [`docs/PHASE-2-MINING.md`](./docs/PHASE-2-MINING.md) for the mining policy,
 > [`docs/TOKENOMICS.md`](./docs/TOKENOMICS.md) for the supply curve, and
 > [`docs/PHASE-3-PLAN.md`](./docs/PHASE-3-PLAN.md) for the post-launch minter
 > evolution.
@@ -119,7 +120,31 @@ receipt verified
 
 `output_hash` matches `sha256("Hello, World!")` — `hello.wnd` prints `Hello, World!` and halts. The `raw bytes` line is the ABI-encoded journal (6 fields × 32-byte slots) that an on-chain `ZkExecutionMinter` will `abi.decode`. To see prover progress, set `RUST_LOG=info`.
 
+## Deployment (Base mainnet)
+
+Live since 2026-05-11. Both contracts source-verified on Basescan.
+
+| Contract                     | Address                                                                                                                          |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `Windy` (WNDY)               | [`0x8c64a92e3a12f5ca4050b5fb90804bd24cd653ca`](https://basescan.org/address/0x8c64a92e3a12f5ca4050b5fb90804bd24cd653ca#code)     |
+| `ZkExecutionMinterV2` (live) | [`0xc566ab14616662ae92095a72a8cc23bf62b6ff02`](https://basescan.org/address/0xc566ab14616662ae92095a72a8cc23bf62b6ff02#code)     |
+| `IRiscZeroVerifier`          | [`0x0b144e07a0826182b6b59788c34b32bfa86fb711`](https://basescan.org/address/0x0b144e07a0826182b6b59788c34b32bfa86fb711) (router) |
+| Admin / pauser (Safe)        | [`0x1143569f0B6D17B51b7dfff9Dfa8BbF1AdCe75D7`](https://app.safe.global/home?safe=base:0x1143569f0B6D17B51b7dfff9Dfa8BbF1AdCe75D7) (1-of-1 Safe; signer set can be expanded or renounced later) |
+| Phase 2 `IMAGE_ID`           | `0xb78810f2e9557907cf9865797240661414e8102326cfdd8d8bc7879d58ca57cb`                                                             |
+| Bronze / Silver / Gold       | `0.1` / `1` / `10` WNDY (`1e17` / `1e18` / `1e19` base units; Gold is the per-proof cap)                                         |
+| Hard cap                     | 21,000,000 WNDY (immutable `constant`)                                                                                           |
+| Deploy tx                    | [`0x8ec7640ccfed9c2d3787be6bf47d8a612abb7394e4a973e511ebb99634d56d7c`](https://basescan.org/tx/0x8ec7640ccfed9c2d3787be6bf47d8a612abb7394e4a973e511ebb99634d56d7c) (full 9-tx atomic broadcast in [`contracts/broadcast/DeployMainnet.s.sol/8453/run-latest.json`](contracts/broadcast/DeployMainnet.s.sol/8453/run-latest.json)) |
+
+### Post-deploy trust model
+
+- The deployer EOA holds **zero roles** on both contracts — `renounceRole` is called for `DEFAULT_ADMIN_ROLE` (token + minter) and `PAUSER_ROLE` (minter) inside the same atomic broadcast as the deploy ([`DeployMainnet.s.sol`](contracts/script/DeployMainnet.s.sol)). After block N+1 the deployer is indistinguishable from any other address.
+- The Safe multisig holds `DEFAULT_ADMIN_ROLE` on both contracts and `PAUSER_ROLE` on the minter. It can pause the minter or grant `MINTER_ROLE` to a future Phase 3 minter — it cannot mint WNDY directly.
+- `MINTER_ROLE` on `Windy` is held only by `ZkExecutionMinterV2`. The sole path for new WNDY into existence is a Risc Zero proof verifying a windy-lang execution against the pinned `IMAGE_ID`, which then mints the tier reward to the `recipient` committed inside the journal.
+- The 21M `MAX_SUPPLY` is a `constant` in the bytecode of `Windy.sol`. Even the Safe cannot raise it.
+
 ## Deployment (Base Sepolia)
+
+Testnet record — preserved for the audit trail.
 
 ### Live contracts
 

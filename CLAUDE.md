@@ -20,7 +20,7 @@ Bitcoin의 무차별 해시 기반 PoW를 *의미 있는 계산(esolang 실행)*
 ## 기술 스택
 - **체인**: Base
   - 개발/테스트: Base Sepolia
-  - 본배포: Base mainnet (감사 후)
+  - 본배포: Base mainnet — **live since 2026-05-11** (감사 없이 자체 baseline만으로 진입, 아래 "보안 / 신뢰 원칙" 참조)
 - **컨트랙트**: Solidity, OpenZeppelin (`AccessControl`, `ERC20Burnable`)
 - **빌드/테스트**: Foundry
 - **zkVM**: Risc Zero (RISC-V 기반, Rust guest)
@@ -55,7 +55,7 @@ windy-coin/
 ## 개발 로드맵
 - [x] Foundry 환경 셋업
 - [x] `Windy.sol` 작성 + 테스트 (cap, role-gated mint, burn)
-- [ ] Base Sepolia에 토큰 배포
+- [x] Base Sepolia에 토큰 배포 (`0x17436284Cdc6b86F9281BBdc77161453ef1C9728`, source-verified)
 - [x] Risc Zero 환경 셋업 (hello-world prove + verify 통과)
 - [x] windy-lang 인터프리터를 zkVM guest로 포팅 (Phase 1.3a: hardcoded `hello.wnd` 실행, journal에 program/output hash + exit code + steps 커밋)
 - [x] guest 프로그램: 인터프리터 실행 → 입력 commitment + 실행 결과를 public output (Phase 1.3b: 호스트가 `WindyInput {program, seed, max_steps, stdin}`을 ExecutorEnv로 주입; journal의 program_hash가 입력 커밋, output_hash + exit_code + steps가 실행 결과 public output)
@@ -63,8 +63,8 @@ windy-coin/
 - [x] 다양한 windy 프로그램으로 통합 검증 (Phase 1.6: `circuit/programs/`에 6개 프로그램 — hello, hello_winds, hi_windy, sum_winds, fib, factorial. 각각 24~912 steps, 모두 zkVM에서 Ok exit. ABI/serde round-trip 유닛 테스트 4개 추가. journal hash 표는 `programs/README.md`)
 - [x] `ZkExecutionMinter.sol` — Risc Zero on-chain verifier 통합, proof 받으면 mint (Phase 1.4b: free-mint 정책 — valid proof + nonce 미사용 → recipient에 고정 REWARD mint. risc0-ethereum v3.0.1 `IRiscZeroVerifier`, RiscZeroMockVerifier 기반 Foundry tests 7개 통과: happy path, distinct nonces, replay rejection, bad seal, tampered journal, missing MINTER_ROLE, reward > MAX_SUPPLY)
 - [x] 첫 채굴 성공 (testnet) — `puzzle_hard.wnd` proof로 Silver tier 1.0 WNDY mint. tx [`0xe4d64259...0034d2`](https://sepolia.basescan.org/tx/0xe4d6425907f22e32571690a542f879c4ef4608d00cee14b56eaac0fe9a0034d2), score 34.30, gas 376k. Bonsai/Boundless 안 살아도 로컬 risc0 + Docker로 Groth16 wrap (multi-arch image v2025-04-03.1) 가능했음 — host에 selector prefix만 추가하면 됐음 (encode_seal 동등 로직).
-- [ ] 외부 감사
-- [ ] Base mainnet 배포
+- [x] ~~외부 감사~~ — 2026-05-09 결정으로 스킵 (아래 "보안 / 신뢰 원칙" 섹션 참조)
+- [x] Base mainnet 배포 — 2026-05-11. `DeployMainnet.s.sol` 단일 atomic broadcast로 Windy + V2 minter 동시 배포 + `MINTER_ROLE` grant + admin/pauser → Safe(`0x1143569f...75D7`) 이관 + deployer EOA의 모든 권한 renounce 한 번에 처리. 컨트랙트 주소: Windy [`0x8c64a92e3a12f5ca4050b5fb90804bd24cd653ca`](https://basescan.org/address/0x8c64a92e3a12f5ca4050b5fb90804bd24cd653ca#code), V2 minter [`0xc566ab14616662ae92095a72a8cc23bf62b6ff02`](https://basescan.org/address/0xc566ab14616662ae92095a72a8cc23bf62b6ff02#code). 둘 다 source-verified. 9-tx broadcast 기록은 [`contracts/broadcast/DeployMainnet.s.sol/8453/run-latest.json`](./contracts/broadcast/DeployMainnet.s.sol/8453/run-latest.json). Gas 0.0101 gwei, 총 ~3M gas, 비용 약 0.00003 ETH.
 - [x] Phase 2 mining 정책 구현 — design spec은 [`docs/PHASE-2-MINING.md`](./docs/PHASE-2-MINING.md). free-mint → tier-based (None / Bronze 0.1 / Silver 1 / Gold 10 WNDY) 마이그레이션 완료. V2 minter Sepolia 배포 (`0x03bd354738f5776c5c00a30024192c61c3f53c97`, source-verified), V1 minter `MINTER_ROLE` 회수 + `pause()` 처리. Session A (windy-lang v2.2.1 + visited_cells journal v2), Session B (`ZkExecutionMinterV2.sol` + 25 tests, 100% coverage, Slither 0), Session C (Sepolia 배포 + V1 retirement) 다 완료.
 - [ ] (Phase 3) Sonification NFT minter — windy-aria 결합
 
@@ -88,7 +88,7 @@ TBD — Foundry 셋업 후 채움.
   - Sepolia 첫 채굴 검증 통과 (1.0 WNDY at Silver tier)
   - `Cargo.lock` committed (reproducible IMAGE_ID)
   - Multisig admin migration script 준비 (`MigrateAdmin.s.sol`)
-  - Mainnet atomic deploy + 즉시 admin renounce script (`DeployMainnet.s.sol`)
+  - Mainnet atomic deploy + 즉시 admin renounce script (`DeployMainnet.s.sol`) — **실행 완료 2026-05-11**, deployer EOA는 broadcast 종료 시점에 권한 0
 
 ## 참고
 - 부모 오케스트레이션 repo: [sisobus-workspace](https://github.com/sisobus/sisobus-workspace)
