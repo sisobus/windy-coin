@@ -124,6 +124,9 @@ receipt verified
 
 Live since 2026-05-11. Both contracts source-verified on Basescan.
 
+> **채굴해보고 싶다면** → [`docs/MINING-GUIDE.md`](./docs/MINING-GUIDE.md) 에 본인
+> `.wnd` 프로그램을 작성해서 WNDY를 받는 end-to-end 절차가 정리돼 있다.
+
 | Contract                     | Address                                                                                                                          |
 | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `Windy` (WNDY)               | [`0x8c64a92e3a12f5ca4050b5fb90804bd24cd653ca`](https://basescan.org/address/0x8c64a92e3a12f5ca4050b5fb90804bd24cd653ca#code)     |
