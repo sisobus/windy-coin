@@ -145,6 +145,25 @@ Live since 2026-05-11. Both contracts source-verified on Basescan.
 - `MINTER_ROLE` on `Windy` is held only by `ZkExecutionMinterV2`. The sole path for new WNDY into existence is a Risc Zero proof verifying a windy-lang execution against the pinned `IMAGE_ID`, which then mints the tier reward to the `recipient` committed inside the journal.
 - The 21M `MAX_SUPPLY` is a `constant` in the bytecode of `Windy.sol`. Even the Safe cannot raise it.
 
+### First mainnet mint (Silver tier — `puzzle_hard.wnd`)
+
+| Field            | Value                                                                                                                       |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Date             | 2026-05-11                                                                                                                  |
+| Tx               | [`0x97310d285fd88d1393c9ac858c71ca9a10dcb369601e08a6bdad415e734ac54c`](https://basescan.org/tx/0x97310d285fd88d1393c9ac858c71ca9a10dcb369601e08a6bdad415e734ac54c) (block 45,894,604) |
+| Recipient        | `0xCE1339F8F499aB0cA276F949F636082c9C305167` (deployer EOA — no longer privileged, just a normal address)                    |
+| Source program   | `circuit/programs/puzzle_hard.wnd` (4 IPs, 3 SPLITs, 18 ticks — same program that landed Silver on Sepolia)                  |
+| `program_hash`   | `0x9b1031224069c0d2e5398ffa4ddca016a07979a30f1201f44078fc288939a31c`                                                         |
+| `output_hash`    | `0xa3a2a5f918f186fbf86c27f190a7b1fc83fb7c3ac0efbc82d4239c82d06c54ef` (`sha256("1 2 4 3 2 6 5 1 7 4 ")`)                      |
+| `visited_cells`  | 15                                                                                                                          |
+| Score            | **34.30** (`scoreX1000 = 34300`)                                                                                            |
+| Tier / reward    | **Silver** / `1.0 WNDY`                                                                                                     |
+| `totalSupply`    | 1.0 WNDY after this mint (pre-mine was 0; this is genesis circulating supply)                                              |
+
+A second `cast send` of the same `(seal, journal)` reverts with `ProgramAlreadyConsumed(0x9b1031...931c)` — confirming the first-claim dedup policy is live on mainnet. The `puzzle_hard.wnd` program is now permanently unmineable.
+
+For writing your own `.wnd` to mine WNDY, see [`docs/MINING-GUIDE.md`](docs/MINING-GUIDE.md).
+
 ## Deployment (Base Sepolia)
 
 Testnet record — preserved for the audit trail.
