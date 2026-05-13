@@ -86,16 +86,20 @@ jobs:
           # Skip if the release already exists (re-running the workflow
           # against an already-published tag should not error out).
           TAG="${{ steps.meta.outputs.tag }}"
+          VERSION="${{ steps.meta.outputs.version }}"
+          cat >/tmp/notes.md <<EOF
+          windy-mine v${VERSION} published to crates.io.
+
+          Install:
+
+              cargo install windy-mine
+
+          See [\`docs/MINING-GUIDE.md\`](https://github.com/sisobus/windy-coin/blob/master/docs/MINING-GUIDE.md) for usage.
+          EOF
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "release $TAG already exists, skipping create"
           else
             gh release create "$TAG" \
               --title "$TAG" \
-              --notes "windy-mine v${{ steps.meta.outputs.version }} published to crates.io.
-
-Install:
-
-    cargo install windy-mine
-
-See [\`docs/MINING-GUIDE.md\`](https://github.com/sisobus/windy-coin/blob/master/docs/MINING-GUIDE.md) for usage."
+              --notes-file /tmp/notes.md
           fi
