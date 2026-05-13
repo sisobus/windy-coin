@@ -24,7 +24,7 @@ Bitcoin의 무차별 해시 기반 PoW를 *의미 있는 계산(esolang 실행)*
 - **컨트랙트**: Solidity, OpenZeppelin (`AccessControl`, `ERC20Burnable`)
 - **빌드/테스트**: Foundry
 - **zkVM**: Risc Zero (RISC-V 기반, Rust guest)
-- **windy-lang 인터프리터**: Rust 기반 (sisobus/windy) → guest program으로 vendoring
+- **windy-lang 인터프리터**: Rust 기반 (sisobus/windy-lang) → guest program으로 vendoring
 
 ## 아키텍처 원칙
 1. **토큰 컨트랙트는 한 번 배포 후 영구 불변**
@@ -94,5 +94,5 @@ TBD — Foundry 셋업 후 채움.
 
 ## 참고
 - 부모 오케스트레이션 repo: [sisobus-workspace](https://github.com/sisobus/sisobus-workspace)
-- 인터프리터 출처: [sisobus/windy](https://github.com/sisobus/windy)
+- 인터프리터 출처: [sisobus/windy-lang](https://github.com/sisobus/windy-lang)
 - Phase 2 결합 대상: [sisobus/windy-aria](https://github.com/sisobus/windy-aria)

@@ -1,6 +1,6 @@
 # windy-coin sample programs
 
-Hand-picked windy-lang programs from [`sisobus/windy/examples`](https://github.com/sisobus/windy/tree/main/examples) plus the bundled hello.
+Hand-picked windy-lang programs from [`sisobus/windy-lang/examples`](https://github.com/sisobus/windy-lang/tree/main/examples) plus the bundled hello.
 
 Each program is run end-to-end through the zkVM guest with `--seed 0
 --max-steps 100000` and an arbitrary fixed recipient/nonce. The
