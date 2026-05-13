@@ -2213,13 +2213,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "methods"
-version = "0.1.0"
-dependencies = [
- "risc0-build",
-]
-
-[[package]]
 name = "mio"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4473,15 +4466,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6bbff5f0aada427a1e5a6da5f1f98158182f26556f345ac9e04d36d0ebed650"
 
 [[package]]
-name = "windy-circuit-core"
-version = "0.1.0"
-dependencies = [
- "alloy-primitives",
- "alloy-sol-types",
- "serde",
-]
-
-[[package]]
 name = "windy-mine"
 version = "0.1.0"
 dependencies = [
@@ -4490,11 +4474,10 @@ dependencies = [
  "anyhow",
  "clap",
  "hex",
- "methods",
  "rand 0.9.4",
  "risc0-zkvm",
+ "serde",
  "tracing-subscriber 0.3.23",
- "windy-circuit-core",
 ]
 
 [[package]]

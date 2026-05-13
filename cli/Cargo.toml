@@ -2,20 +2,33 @@
 name = "windy-mine"
 version = "0.1.0"
 edition = "2021"
-description = "End-to-end Risc Zero proof + Base mainnet mint for the WNDY (windy-coin) token."
+rust-version = "1.75"
+description = "End-to-end Risc Zero proof + Base mainnet mint for the WNDY (windy-coin) token. Also a `windy mine` plugin for windy-lang."
+authors = ["Kim Sangkeun (sisobus) <windy@classum.com>"]
 license = "MIT"
+homepage = "https://github.com/sisobus/windy-coin"
 repository = "https://github.com/sisobus/windy-coin"
+documentation = "https://github.com/sisobus/windy-coin/blob/master/docs/MINING-GUIDE.md"
+readme = "README.md"
+keywords = ["mining", "zk", "risc0", "ethereum", "esolang"]
+categories = ["command-line-utilities", "cryptography"]
+include = [
+    "/Cargo.toml",
+    "/Cargo.lock",
+    "/README.md",
+    "/src/**/*.rs",
+    "/windy-guest.bin",
+]
 
 [[bin]]
 name = "windy-mine"
 path = "src/main.rs"
 
 [dependencies]
-methods = { path = "../circuit/methods" }
-windy-circuit-core = { path = "../circuit/core" }
 risc0-zkvm = { version = "^3.0.5" }
 alloy-primitives = "1"
 alloy-sol-types = "1"
+serde = { version = "1", features = ["derive"] }
 clap = { version = "4", features = ["derive"] }
 hex = "0.4"
 rand = "0.9"

@@ -21,9 +21,62 @@ use alloy_primitives::keccak256;
 use alloy_sol_types::SolValue;
 use anyhow::{anyhow, bail, Context, Result};
 use clap::Parser;
-use methods::{WINDY_GUEST_ELF, WINDY_GUEST_ID};
 use risc0_zkvm::{default_executor, default_prover, ExecutorEnv, ProverOpts};
-use windy_circuit_core::{WindyInput, WindyJournalSol};
+use serde::{Deserialize, Serialize};
+
+// The guest ELF and its image ID are inlined here so this crate has
+// zero path dependencies and can ship from crates.io. To regenerate
+// after a guest source change: build the windy-coin `circuit` workspace
+// (`cd circuit && cargo build --release`) then run:
+//
+//   cp circuit/target/riscv-guest/methods/windy-guest/riscv32im-risc0-zkvm-elf/release/windy-guest.bin \
+//      cli/windy-guest.bin
+//
+// and copy the `WINDY_GUEST_ID` from the generated `methods.rs` (under
+// `cli/target/release/build/methods-*/out/methods.rs` after a fresh
+// build) into the constant below. The image ID baked into the live
+// mainnet minter is 0xb78810f2e9557907cf9865797240661414e8102326cfdd8d8bc7879d58ca57cb.
+const WINDY_GUEST_ELF: &[u8] = include_bytes!("../windy-guest.bin");
+const WINDY_GUEST_ID: [u32; 8] = [
+    4061169847, 125392361, 2036701391, 342245490, 588310548, 2380123942, 2642921355, 3411528280,
+];
+
+// Host→guest input. Field order and types MUST match the guest's
+// `windy_circuit_core::WindyInput` — risc0 uses bincode-style serde
+// for ExecutorEnv reads, so any drift would silently misparse.
+#[derive(Serialize, Deserialize)]
+struct WindyInput {
+    program: String,
+    seed: u64,
+    max_steps: u64,
+    stdin: Vec<u8>,
+    recipient: [u8; 20],
+    nonce: [u8; 32],
+}
+
+alloy_sol_types::sol! {
+    /// Public output committed by the guest. ABI-encoded bytes of this
+    /// struct are exactly what `receipt.journal.bytes` contains, so
+    /// `ZkExecutionMinterV2` parses it via `abi.decode(journal, (WindyJournalSol))`.
+    /// Field order MUST match `windy_circuit_core::WindyJournalSol` and the
+    /// `WindyJournal` struct in the minter. 14 head slots, 448 ABI bytes.
+    struct WindyJournalSol {
+        address recipient;
+        bytes32 nonce;
+        bytes32 programHash;
+        bytes32 outputHash;
+        int32   exitCode;
+        uint64  steps;
+        uint16  hardOpcodeBitmap;
+        uint64  maxAliveIps;
+        uint64  spawnedIps;
+        uint64  gridWrites;
+        uint64  branchCount;
+        uint64  visitedCells;
+        uint32  effectiveCells;
+        uint32  totalGridCells;
+    }
+}
 
 const DEFAULT_MINTER: &str = "0xc566ab14616662ae92095a72a8cc23bf62b6ff02";
 const DEFAULT_WNDY: &str = "0x8c64a92e3a12f5ca4050b5fb90804bd24cd653ca";
