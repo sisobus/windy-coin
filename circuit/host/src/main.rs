@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use alloy_sol_types::SolValue;
 use clap::Parser;
 use methods::{WINDY_GUEST_ELF, WINDY_GUEST_ID};
-use risc0_zkvm::{default_prover, sha::Digest, ExecutorEnv, ProverOpts};
+use risc0_zkvm::{default_executor, default_prover, sha::Digest, ExecutorEnv, ProverOpts};
 use windy_circuit_core::{WindyInput, WindyJournalSol};
 
 const DEFAULT_PROGRAM: &str = include_str!("../../programs/hello.wnd");
@@ -43,6 +43,16 @@ struct Cli {
     /// Optional file to feed as stdin to the windy program.
     #[arg(long, value_name = "PATH")]
     stdin_file: Option<PathBuf>,
+
+    /// Skip Risc Zero proof generation. Runs the zkVM guest only and
+    /// prints the journal + Phase 2 metrics so a candidate program can
+    /// be graded via `ZkExecutionMinterV2.computeScore` off-chain.
+    /// Much faster (~seconds, no Docker, no Groth16 wrap) but the
+    /// resulting journal is *not* accompanied by a seal and cannot be
+    /// submitted to mint. Intended for iterating on program design
+    /// before paying gas. Pair with `scripts/mine.sh --dry-run`.
+    #[arg(long)]
+    score_only: bool,
 }
 
 fn parse_address(s: &str) -> Result<[u8; 20], String> {
@@ -113,6 +123,34 @@ fn image_id_bytes() -> [u8; 32] {
     Digest::from(WINDY_GUEST_ID).into()
 }
 
+fn print_journal_block(journal: &WindyJournalSol, raw_bytes_len: usize) {
+    println!("guest journal:");
+    println!("  recipient:          0x{}", hex::encode(journal.recipient));
+    println!("  nonce:              0x{}", hex::encode(journal.nonce));
+    println!("  program_hash:       0x{}", hex::encode(journal.programHash));
+    println!("  output_hash:        0x{}", hex::encode(journal.outputHash));
+    println!(
+        "  exit_code:          {} ({})",
+        journal.exitCode,
+        exit_label(journal.exitCode)
+    );
+    println!("  steps:              {}", journal.steps);
+    println!("  ─ Phase 2 metrics ─");
+    println!(
+        "  hard_opcode_bitmap: 0x{:04x}  ({})",
+        journal.hardOpcodeBitmap,
+        format_hard_opcodes(journal.hardOpcodeBitmap)
+    );
+    println!("  max_alive_ips:      {}", journal.maxAliveIps);
+    println!("  spawned_ips:        {}", journal.spawnedIps);
+    println!("  grid_writes:        {}", journal.gridWrites);
+    println!("  branch_count:       {}", journal.branchCount);
+    println!("  visited_cells:      {}  (trace-truth code size)", journal.visitedCells);
+    println!("  effective_cells:    {}  (static parse, includes punctuation in comments)", journal.effectiveCells);
+    println!("  total_grid_cells:   {}", journal.totalGridCells);
+    println!("  raw bytes:          {} (abi-encoded)", raw_bytes_len);
+}
+
 fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::filter::EnvFilter::from_default_env())
@@ -158,6 +196,28 @@ fn main() {
         .build()
         .unwrap();
 
+    if cli.score_only {
+        // Execute the zkVM guest without generating a proof — fast
+        // path (~seconds, no Docker) used by `scripts/mine.sh --dry-run`
+        // to grade a candidate program before paying gas. The returned
+        // journal is byte-identical to what a real proof would commit,
+        // so it can be fed straight into `computeScore` for tier
+        // prediction; just not into `mint`, since there's no seal.
+        let session_info = default_executor()
+            .execute(env, WINDY_GUEST_ELF)
+            .expect("zkVM execution failed");
+        let journal_bytes = &session_info.journal.bytes;
+        let journal = WindyJournalSol::abi_decode_validate(journal_bytes)
+            .expect("guest journal must abi-decode as WindyJournalSol");
+
+        print_journal_block(&journal, journal_bytes.len());
+        println!();
+        println!("score-only mode — no Groth16 seal produced; this run cannot mint.");
+        println!("journal (for off-chain `computeScore` grading):");
+        println!("  0x{}", hex::encode(journal_bytes));
+        return;
+    }
+
     let prover = default_prover();
     // Request a Groth16 receipt directly. With the local prover this
     // requires Docker (the STARK→Groth16 wrap runs in a container);
@@ -170,31 +230,7 @@ fn main() {
     let journal = WindyJournalSol::abi_decode_validate(&receipt.journal.bytes)
         .expect("guest journal must abi-decode as WindyJournalSol");
 
-    println!("guest journal:");
-    println!("  recipient:          0x{}", hex::encode(journal.recipient));
-    println!("  nonce:              0x{}", hex::encode(journal.nonce));
-    println!("  program_hash:       0x{}", hex::encode(journal.programHash));
-    println!("  output_hash:        0x{}", hex::encode(journal.outputHash));
-    println!(
-        "  exit_code:          {} ({})",
-        journal.exitCode,
-        exit_label(journal.exitCode)
-    );
-    println!("  steps:              {}", journal.steps);
-    println!("  ─ Phase 2 metrics ─");
-    println!(
-        "  hard_opcode_bitmap: 0x{:04x}  ({})",
-        journal.hardOpcodeBitmap,
-        format_hard_opcodes(journal.hardOpcodeBitmap)
-    );
-    println!("  max_alive_ips:      {}", journal.maxAliveIps);
-    println!("  spawned_ips:        {}", journal.spawnedIps);
-    println!("  grid_writes:        {}", journal.gridWrites);
-    println!("  branch_count:       {}", journal.branchCount);
-    println!("  visited_cells:      {}  (trace-truth code size)", journal.visitedCells);
-    println!("  effective_cells:    {}  (static parse, includes punctuation in comments)", journal.effectiveCells);
-    println!("  total_grid_cells:   {}", journal.totalGridCells);
-    println!("  raw bytes:          {} (abi-encoded)", receipt.journal.bytes.len());
+    print_journal_block(&journal, receipt.journal.bytes.len());
 
     receipt
         .verify(WINDY_GUEST_ID)
