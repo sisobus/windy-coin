@@ -1,0 +1,23 @@
+[package]
+name = "windy-mine"
+version = "0.1.0"
+edition = "2021"
+description = "End-to-end Risc Zero proof + Base mainnet mint for the WNDY (windy-coin) token."
+license = "MIT"
+repository = "https://github.com/sisobus/windy-coin"
+
+[[bin]]
+name = "windy-mine"
+path = "src/main.rs"
+
+[dependencies]
+methods = { path = "../circuit/methods" }
+windy-circuit-core = { path = "../circuit/core" }
+risc0-zkvm = { version = "^3.0.5" }
+alloy-primitives = "1"
+alloy-sol-types = "1"
+clap = { version = "4", features = ["derive"] }
+hex = "0.4"
+rand = "0.9"
+anyhow = "1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
