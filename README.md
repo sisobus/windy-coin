@@ -162,6 +162,25 @@ Live since 2026-05-11. Both contracts source-verified on Basescan.
 
 A second `cast send` of the same `(seal, journal)` reverts with `ProgramAlreadyConsumed(0x9b1031...931c)` — confirming the first-claim dedup policy is live on mainnet. The `puzzle_hard.wnd` program is now permanently unmineable.
 
+### First mainnet Gold mint — `fib_gold.wnd`
+
+| Field            | Value                                                                                                                       |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Date             | 2026-05-13                                                                                                                  |
+| Tx               | [`0x336fcf86373ab02f25b914058f3e911ef62b27d034bbadf76661b938b6788783`](https://basescan.org/tx/0x336fcf86373ab02f25b914058f3e911ef62b27d034bbadf76661b938b6788783) (block 45,921,336) |
+| Recipient        | `0xCE1339F8F499aB0cA276F949F636082c9C305167` (deployer EOA, no longer privileged)                                            |
+| Source program   | `circuit/programs/fib_gold.wnd` — fib.wnd with counter init `55+` (=10) → `99*` (=81), 81 Fibonacci iterations              |
+| `program_hash`   | `0x838716738923512c57af7cddf4aae0208ef18147927e9bfd70e400c46a10afce`                                                         |
+| `output_hash`    | `0x3b665adf8c7dfabd1c0d507f146909703223c42bc0865bb26c6e6172e5e5cb2f`                                                         |
+| `visited_cells`  | 100                                                                                                                         |
+| `grid_writes`    | 246 (saturates 100-cap → core +30)                                                                                          |
+| `branch_count`   | 81                                                                                                                          |
+| Score            | **87.780** (`scoreX1000 = 87780`)                                                                                           |
+| Tier / reward    | **Gold** / `10.0 WNDY`                                                                                                      |
+| `totalSupply`    | 11.0 WNDY (1 Silver + 10 Gold)                                                                                              |
+
+Confirms the full None / Bronze / Silver / Gold dispatch path is live on mainnet — same scoring formula the `--dry-run` mode predicts, byte-identical journal.
+
 For writing your own `.wnd` to mine WNDY, see [`docs/MINING-GUIDE.md`](docs/MINING-GUIDE.md).
 
 ## Deployment (Base Sepolia)
